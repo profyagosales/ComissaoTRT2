@@ -107,3 +107,12 @@
 - Trocar placeholders de posts do Instagram por integração real (API oficial, embed ou processamento manual).
 - Definir fluxo de autenticação do “Ambiente do aprovado” (e-mail oficial, ID de candidato etc.) e substituir o modal temporário.
 - Eventualmente aplicar o padrão do **calçadão de SP** em seções específicas (rodapés, faixas de destaque) respeitando acessibilidade e legibilidade.
+
+### 2025-11-15 — Fluxo de autenticação dos aprovados
+
+- Criadas e estilizadas as páginas `/login` e `/signup` com fundo “calçadão de SP” e cards cinza claro.
+- Integrado Supabase Auth para login por e-mail/senha.
+- Implementado fluxo de criação de perfil vinculando `user_id` ao `candidate_id` na `user_profiles`, salvando telefone, Instagram, outras redes e `role` (`PUBLICO` ou `COMISSAO`).
+- Adicionado upload opcional de foto de perfil: bucket público `avatars`, URL pública salva em `user_profiles.avatar_url` e consumida no `/resumo`.
+- Ajustadas políticas de RLS em `user_profiles` para leitura/atualização do próprio perfil, inserção (signup) e política de desenvolvimento para testes.
+- Botão “Entrar no ambiente do aprovado” na landing agora abre modal com CTAs diretos para `/login` e `/signup`.

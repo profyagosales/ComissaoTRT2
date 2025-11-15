@@ -2,12 +2,24 @@
 
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { logos } from './branding/logos';
 
 const INSTAGRAM_URL = 'https://www.instagram.com/aprovados_tjaa/';
 
 export default function HomePage() {
+  const router = useRouter();
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const handleGoToLogin = () => {
+    setIsModalOpen(false);
+    router.push('/login');
+  };
+
+  const handleGoToSignup = () => {
+    setIsModalOpen(false);
+    router.push('/signup');
+  };
 
   return (
     <main className="min-h-screen text-neutral-900">
@@ -25,7 +37,13 @@ export default function HomePage() {
         </div>
       </div>
 
-      {isModalOpen && <LoginPlaceholderModal onClose={() => setIsModalOpen(false)} />}
+      {isModalOpen && (
+        <LoginPlaceholderModal
+          onClose={() => setIsModalOpen(false)}
+          onGoToLogin={handleGoToLogin}
+          onGoToSignup={handleGoToSignup}
+        />
+      )}
     </main>
   );
 }
@@ -270,11 +288,19 @@ function RedesOficiaisSection() {
 /*  MODAL – POR ENQUANTO APENAS PLACEHOLDER                           */
 /* ------------------------------------------------------------------ */
 
-function LoginPlaceholderModal({ onClose }: { onClose: () => void }) {
+function LoginPlaceholderModal({
+  onClose,
+  onGoToLogin,
+  onGoToSignup,
+}: {
+  onClose: () => void;
+  onGoToLogin: () => void;
+  onGoToSignup: () => void;
+}) {
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4">
-      <div className="w-full max-w-lg rounded-3xl bg-gradient-to-b from-neutral-900 to-black p-[1px] shadow-[0_26px_60px_rgba(0,0,0,0.65)]">
-        <div className="rounded-3xl bg-neutral-950 px-5 py-5 text-white sm:px-7 sm:py-7">
+      <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-neutral-200/95 p-[1px] shadow-[0_26px_60px_rgba(0,0,0,0.65)]">
+        <div className="rounded-3xl bg-neutral-900 px-5 py-5 text-zinc-50 sm:px-7 sm:py-7">
           <div className="mb-4 flex items-center justify-between gap-4">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-red-400">
@@ -294,16 +320,26 @@ function LoginPlaceholderModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <p className="text-xs leading-relaxed text-neutral-300">
-            O fluxo de login ainda será definido pela Comissão. Em breve, o acesso ao painel dos aprovados será liberado com validação pelo e-mail oficial do concurso.
+            Escolha uma opção para acessar o painel: entrar com seu perfil já cadastrado ou criar seu perfil de aprovado usando o e-mail oficial do concurso.
           </p>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="mt-6 w-full rounded-full bg-red-600 px-4 py-3 text-sm font-semibold tracking-wide text-white shadow-md transition hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
-          >
-            Entendi
-          </button>
+          <div className="mt-6 flex flex-col gap-3">
+            <button
+              type="button"
+              onClick={onGoToLogin}
+              className="w-full rounded-full bg-red-600 px-4 py-3 text-sm font-semibold tracking-wide text-white shadow-md transition hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
+            >
+              Já tenho perfil — entrar
+            </button>
+
+            <button
+              type="button"
+              onClick={onGoToSignup}
+              className="w-full rounded-full border border-red-500/60 bg-transparent px-4 py-3 text-sm font-semibold tracking-wide text-red-100 transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
+            >
+              Criar meu perfil de aprovado
+            </button>
+          </div>
         </div>
       </div>
     </div>
