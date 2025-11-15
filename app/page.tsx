@@ -1,469 +1,474 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { logos } from "./config/logos";
 
 const COMISSAO_EMAIL = "aprovados.tjaa.trt2.2025@gmail.com";
 const INSTAGRAM_URL = "https://www.instagram.com/aprovados_tjaa/";
 
-// Placeholders (depois vamos puxar do Supabase)
-const stats = [
+type Indicator = {
+  id: number;
+  label: string;
+  title: string;
+  value: string;
+  description: string;
+};
+
+const INDICATORS: Indicator[] = [
   {
-    id: "aprovados-total",
+    id: 1,
+    label: "INDICADOR 1 DE 4",
     title: "Total de aprovados TJAA",
     value: "3.000",
-    detail: "Somatório geral do concurso",
+    description: "Somatório geral do concurso.",
   },
   {
-    id: "aprovados-cotas",
+    id: 2,
+    label: "INDICADOR 2 DE 4",
     title: "Por sistema de concorrência",
     value: "AC • PCD • PPP • Indígena",
-    detail: "Distribuição por listas específicas",
+    description: "Distribuição por listas específicas.",
   },
   {
-    id: "nomeados-total",
+    id: 3,
+    label: "INDICADOR 3 DE 4",
     title: "Total de nomeados",
     value: "0",
-    detail: "Atualizado pela Comissão",
+    description: "Atualizado pela Comissão.",
   },
   {
-    id: "tds-total",
-    title: "Termos de Desistência",
+    id: 4,
+    label: "INDICADOR 4 DE 4",
+    title: "Termos de Desistência (TDs)",
     value: "0",
-    detail: "Inclui TDs confirmados pela Comissão",
+    description: "Inclui apenas TDs confirmados pela Comissão.",
   },
-];
-
-const instagramPlaceholders = [
-  { id: 1, title: "Post oficial #1" },
-  { id: 2, title: "Post oficial #2" },
-  { id: 3, title: "Post oficial #3" },
-  { id: 4, title: "Post oficial #4" },
 ];
 
 export default function HomePage() {
-  const [authOpen, setAuthOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authTab, setAuthTab] = useState<"login" | "signUp">("login");
+  const [activeIndicator, setActiveIndicator] = useState(0);
+
+  // Slider automático a cada 7 segundos
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setActiveIndicator((prev) => (prev + 1) % INDICATORS.length);
+    }, 7000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const current = INDICATORS[activeIndicator];
 
   return (
-    <main>
-      <header className="w-full border-b border-tjaa-red/40 bg-tjaa-red text-white">
-        <div className="mx-auto flex max-w-[1440px] items-center justify-end px-4 py-1.5 text-[11px] md:px-6">
-          <a
+    <main className="min-h-screen bg-zinc-300/80 text-zinc-900">
+      {/* Barra superior preta com link vermelho */}
+      <div className="w-full border-b border-zinc-700 bg-black text-xs text-zinc-50">
+        <div className="mx-auto flex max-w-6xl items-center justify-end px-4 py-1.5">
+          <Link
             href={`mailto:${COMISSAO_EMAIL}`}
-            className="font-medium underline-offset-2 hover:underline"
+            className="font-medium text-red-500 hover:text-red-400"
           >
             Entre em contato com a Comissão
-          </a>
+          </Link>
         </div>
-      </header>
+      </div>
 
-      {/* Conteúdo principal */}
-      <section className="mx-auto flex max-w-[1440px] flex-col gap-6 px-2 pb-10 pt-4 md:gap-7 md:px-4 md:pb-14 md:pt-6">
-        <HeroSection onOpenAuthModal={() => setAuthOpen(true)} />
+      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 pb-10 pt-6">
+        <HeroSection
+          onOpenAuthModal={() => {
+            setAuthTab("login");
+            setIsAuthModalOpen(true);
+          }}
+        />
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-          <StatsSection />
-          <InstagramSection />
+        <div className="flex flex-col gap-6 lg:flex-row">
+          <div className="flex-1">
+            <ResumoSection
+              current={current}
+              activeIndicator={activeIndicator}
+              onSelectIndicator={setActiveIndicator}
+            />
+          </div>
+          <div className="w-full lg:w-[360px]">
+            <RedesOficiaisSection />
+          </div>
         </div>
-      </section>
+      </div>
 
-      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
+      {isAuthModalOpen && (
+        <AuthModal
+          activeTab={authTab}
+          onTabChange={setAuthTab}
+          onClose={() => setIsAuthModalOpen(false)}
+        />
+      )}
     </main>
   );
 }
 
-/* ================= HERO ================= */
+/* HERO ------------------------------------------------------------------- */
 
-function HeroSection({ onOpenAuthModal }: { onOpenAuthModal: () => void }) {
+function HeroSection(props: { onOpenAuthModal: () => void }) {
   return (
-    <section className="relative overflow-hidden rounded-[32px] border border-black/10 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.45)]">
-      {/* gradiente horizontal branco -> vermelho */}
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage:
-            "linear-gradient(90deg,#ffffff 0%,#fee2e2 25%,#f97373 55%,#7f1d1d 100%)",
-        }}
-      />
+    <section
+      aria-labelledby="hero-heading"
+      className="relative overflow-hidden rounded-3xl border border-white/70 bg-gradient-to-r from-white via-rose-50 to-red-600 shadow-[0_22px_45px_rgba(0,0,0,0.45)]"
+    >
+      {/* Calçadão suave na parte de baixo */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-[linear-gradient(135deg,rgba(0,0,0,0.07)_25%,transparent_25%,transparent_50%,rgba(0,0,0,0.07)_50%,rgba(0,0,0,0.07)_75%,transparent_75%,transparent)] bg-[length:32px_32px] opacity-35" />
 
-      {/* leve textura diagonal inspirada no calçadão, bem sutil */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-[linear-gradient(135deg,rgba(0,0,0,0.16)_25%,rgba(0,0,0,0)_25%,rgba(0,0,0,0)_50%,rgba(0,0,0,0.16)_50%,rgba(0,0,0,0.16)_75%,rgba(0,0,0,0)_75%,rgba(0,0,0,0)_100%)] bg-[length:28px_28px] opacity-[0.26]" />
-
-      <div className="relative grid items-center gap-6 px-4 py-6 md:grid-cols-[minmax(0,2.4fr)_minmax(0,1.6fr)] md:px-8 md:py-7">
-        {/* lado esquerdo */}
-        <div className="flex items-start gap-5">
-          <div className="relative shrink-0">
-            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-white via-tjaa-red to-black p-[3px] md:h-24 md:w-24">
-              <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-black">
+      <div className="relative z-10 flex flex-col gap-8 p-7 md:flex-row md:items-center md:justify-between md:p-9 lg:p-10">
+        {/* Bloco logo + textos */}
+        <div className="flex flex-1 flex-col gap-4">
+          <div className="flex items-center gap-5">
+            <div className="shrink-0 rounded-full bg-black shadow-[0_0_0_3px_rgba(255,255,255,0.5)]">
+              <div className="rounded-full bg-black p-2">
                 <Image
-                  src="/logo-comissao-tjaa.png"
-                  alt="Logotipo Comissão TJAA TRT-2"
-                  width={100}
-                  height={100}
-                  className="h-auto w-auto"
+                  src={logos.primary}
+                  alt="Logo oficial da Comissão de Aprovados TJAA TRT-2"
+                  width={96}
+                  height={96}
+                  className="h-24 w-24 rounded-full object-contain"
                   priority
                 />
               </div>
             </div>
-          </div>
 
-          <div className="space-y-3 text-white">
-            <div>
-              <h1 className="font-heading text-2xl font-extrabold tracking-tight md:text-[28px]">
+            <div className="space-y-1">
+              <p className="text-xs font-medium tracking-[0.24em] text-zinc-800">
+                COMISSÃO TJAA · CONCURSO 2025
+              </p>
+              <h1
+                id="hero-heading"
+                className="font-heading text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl lg:text-[32px]"
+              >
                 Aprovados TRT da 2ª Região
               </h1>
-              <p className="font-heading text-[11px] uppercase tracking-[0.24em] text-gray-100 md:text-xs">
-                Comissão TJAA · Concurso 2025
-              </p>
-              <div className="mt-1 h-[2px] w-28 rounded-full bg-gradient-to-r from-white via-[#ffe0e0] to-transparent" />
             </div>
-
-            <p className="text-sm font-semibold text-gray-50 md:text-[15px]">
-              Comissão de aprovados do Tribunal Regional do Trabalho da 2ª Região
-              para o cargo de Técnico Judiciário – Área Administrativa (TJAA),
-              concurso de 2025.
-            </p>
-            <p className="text-xs text-gray-100 md:text-[13px]">
-              Site criado pela Comissão para controle de listas, Termos de
-              Desistência (TDs), vacâncias, nomeações, PCIs e outras movimentações.
-              Organizados, somos mais fortes.
-            </p>
           </div>
+
+          <p className="max-w-3xl text-sm leading-relaxed text-zinc-900/90">
+            Comissão de aprovados do Tribunal Regional do Trabalho da 2ª Região para o cargo de Técnico Judiciário – Área Administrativa (TJAA), concurso de 2025.
+          </p>
+
+          <p className="max-w-3xl text-sm leading-relaxed text-zinc-900/80">
+            Site criado pela Comissão para controle de listas, Termos de Desistência (TDs), vacâncias, nomeações, PCIs e outras movimentações. Organizados, somos mais fortes.
+          </p>
         </div>
 
-        {/* CTA do aprovado */}
-        <div className="relative flex flex-col gap-3 rounded-2xl border border-white/40 bg-black/35 px-4 py-4 shadow-[0_22px_50px_rgba(0,0,0,0.8)] backdrop-blur-xl md:px-5 md:py-4">
-          <div className="pointer-events-none absolute inset-x-[-20%] -top-10 h-10 bg-gradient-to-b from-white/80 via-white/25 to-transparent opacity-80 blur-xl" />
+        {/* Card de acesso do aprovado */}
+        <div className="mt-4 w-full max-w-xs shrink-0 md:mt-0">
+          <div className="overflow-hidden rounded-2xl bg-black/75 p-[1px] shadow-[0_18px_40px_rgba(0,0,0,0.6)]">
+            <div className="space-y-3 rounded-2xl bg-gradient-to-b from-zinc-950 via-zinc-900 to-zinc-950 px-5 py-4">
+              <p className="text-[11px] font-semibold tracking-[0.22em] text-red-400">
+                AMBIENTE DO APROVADO
+              </p>
+              <p className="text-[13px] leading-snug text-zinc-100">
+                Acesso exclusivo para aprovados na lista oficial do concurso TJAA TRT-2.
+              </p>
 
-          <div className="relative space-y-1 text-white">
-            <h2 className="font-heading text-sm font-semibold md:text-base">
-              Ambiente do aprovado
-            </h2>
-            <p className="text-xs text-gray-100 md:text-[13px]">
-              Acesso exclusivo para aprovados na lista oficial. Faça login ou
-              cadastre seu perfil vinculado ao seu nome.
-            </p>
+              <button
+                type="button"
+                onClick={props.onOpenAuthModal}
+                className="mt-2 inline-flex w-full items-center justify-center rounded-full bg-red-600 px-5 py-3 text-[13px] font-semibold text-white shadow-[0_18px_32px_rgba(127,29,29,0.7)] transition hover:bg-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500"
+              >
+                Entrar no ambiente do aprovado
+              </button>
+
+              <p className="pt-1 text-[11px] text-zinc-400">
+                Ainda não cadastrou seu perfil?{" "}
+                <span className="font-medium text-red-300">
+                  Em breve, cadastro vinculado ao ID de candidato.
+                </span>
+              </p>
+            </div>
           </div>
+        </div>
+      </div>
+    </section>
+  );
+}
 
-          <button
-            type="button"
-            onClick={onOpenAuthModal}
-            className="relative inline-flex items-center justify-center rounded-full bg-tjaa-red px-6 py-2.5 text-sm font-semibold text-white shadow-[0_14px_34px_rgba(127,29,29,0.9)] transition hover:bg-tjaa-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-          >
-            Entrar no ambiente do aprovado
-          </button>
+/* RESUMO ----------------------------------------------------------------- */
 
-          <p className="relative text-[11px] text-gray-100 md:text-xs">
-            Ainda não cadastrou seu perfil?{" "}
-            <button
-              type="button"
-              onClick={onOpenAuthModal}
-              className="font-semibold text-[#ffe7e7] underline-offset-2 hover:underline"
+function ResumoSection(props: {
+  current: Indicator;
+  activeIndicator: number;
+  onSelectIndicator: (index: number) => void;
+}) {
+  const { current, activeIndicator, onSelectIndicator } = props;
+
+  return (
+    <section aria-labelledby="resumo-heading">
+      <div className="overflow-hidden rounded-3xl border border-white/80 bg-white shadow-[0_16px_40px_rgba(0,0,0,0.35)]">
+        {/* Topo vermelho */}
+        <div className="flex items-center justify-between bg-red-700 px-6 py-3">
+          <div>
+            <p
+              id="resumo-heading"
+              className="text-xs font-semibold tracking-[0.18em] text-red-100"
             >
-              Sou aprovado e quero me cadastrar
-            </button>
-          </p>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-/* ================= STATS (SLIDER) ================= */
-
-function StatsSection() {
-  const [currentIndex, setCurrentIndex] = useState(0);
-
-  useEffect(() => {
-    const id = setInterval(
-      () => setCurrentIndex((prev) => (prev + 1) % stats.length),
-      7000,
-    );
-    return () => clearInterval(id);
-  }, []);
-
-  const current = stats[currentIndex];
-
-  return (
-    <section className="relative overflow-hidden rounded-3xl border border-black/10 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.25)]">
-      {/* topo vermelho */}
-      <div className="flex items-center justify-between gap-2 bg-tjaa-red px-5 py-3 text-white md:px-6">
-        <div>
-          <h2 className="font-heading text-sm font-semibold md:text-base">
-            Resumo do concurso TJAA TRT-2
-          </h2>
-          <p className="text-[11px] text-red-100 md:text-xs">
-            Visão geral pública. Os dados são atualizados pela Comissão.
-          </p>
-        </div>
-        <span className="rounded-full border border-red-200/60 bg-red-100/15 px-3 py-1 text-[11px] font-medium text-red-50">
-          Beta público
-        </span>
-      </div>
-
-      {/* corpo branco */}
-      <div className="px-4 pb-4 pt-3 md:px-5">
-        <article className="relative h-44 rounded-2xl border border-slate-100 bg-white px-5 py-4 shadow-[0_14px_28px_rgba(15,23,42,0.08)] md:h-48">
-          <div className="absolute inset-y-4 left-0 w-[3px] rounded-full bg-gradient-to-b from-tjaa-red to-black" />
-
-          <div className="relative ml-3 flex h-full flex-col justify-between">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500">
-                  Indicador {currentIndex + 1} de {stats.length}
-                </p>
-                <h3 className="mt-1 font-heading text-sm font-semibold text-gray-900 md:text-base">
-                  {current.title}
-                </h3>
-              </div>
-              <div className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-3 py-1 text-[10px] font-semibold text-slate-100">
-                <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                <span>Dados oficiais</span>
-              </div>
-            </div>
-
-            <div>
-              <p className="mt-3 text-3xl font-heading font-extrabold tracking-tight text-black md:text-[32px]">
-                {current.value}
-              </p>
-              <p className="mt-1 text-[11px] text-gray-600">{current.detail}</p>
-            </div>
+              RESUMO DO CONCURSO TJAA TRT-2
+            </p>
+            <p className="text-[11px] text-red-100/80">
+              Visão geral pública · Dados atualizados pela Comissão.
+            </p>
           </div>
-        </article>
+          <span className="rounded-full bg-red-900/80 px-3 py-1 text-[11px] font-medium text-red-100">
+            Dados oficiais
+          </span>
+        </div>
 
-        <div className="mt-3 flex items-center justify-center gap-2">
-          {stats.map((item, index) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setCurrentIndex(index)}
-              className={`h-1.5 rounded-full transition-all ${
-                index === currentIndex
-                  ? "w-6 bg-tjaa-red"
-                  : "w-2.5 bg-slate-300 hover:bg-slate-400"
-              }`}
-            />
-          ))}
+        {/* Conteúdo do slide */}
+        <div className="space-y-6 px-6 pb-5 pt-6">
+          <p className="text-[11px] font-medium tracking-[0.22em] text-zinc-500">
+            {current.label}
+          </p>
+
+          <div className="space-y-2">
+            <h2 className="text-lg font-semibold tracking-tight text-zinc-900">
+              {current.title}
+            </h2>
+            <p className="text-4xl font-semibold tracking-tight text-zinc-900">
+              {current.value}
+            </p>
+            <p className="max-w-xl text-sm text-zinc-600">
+              {current.description}
+            </p>
+          </div>
+
+          {/* Bullets do slide */}
+          <div className="mt-4 flex items-center gap-2">
+            {INDICATORS.map((indicator, index) => (
+              <button
+                key={indicator.id}
+                type="button"
+                onClick={() => onSelectIndicator(index)}
+                className={`h-2 w-2 rounded-full transition ${
+                  index === activeIndicator
+                    ? "w-5 bg-zinc-900"
+                    : "bg-zinc-400/60 hover:bg-zinc-500/80"
+                }`}
+                aria-label={`Ir para indicador ${index + 1}`}
+              />
+            ))}
+          </div>
         </div>
       </div>
     </section>
   );
 }
 
-/* ================= REDES OFICIAIS / INSTAGRAM ================= */
+/* REDES OFICIAIS --------------------------------------------------------- */
 
-function InstagramSection() {
+function RedesOficiaisSection() {
   return (
-    <section className="relative flex flex-col rounded-3xl border border-black/10 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.25)]">
-      {/* topo vermelho */}
-      <div className="flex items-center justify-between gap-2 bg-tjaa-red px-5 py-3 text-white md:px-6">
-        <div>
-          <p className="font-heading text-[11px] uppercase tracking-[0.22em] text-red-100">
-            Redes oficiais
-          </p>
-          <h2 className="font-heading text-sm font-semibold md:text-base">
-            Instagram da Comissão
-          </h2>
-        </div>
-        <Link
-          href={INSTAGRAM_URL}
-          target="_blank"
-          className="rounded-full border border-red-100 bg-red-100/10 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-red-100/20 md:px-4 md:text-xs"
-        >
-          Abrir perfil oficial
-        </Link>
-      </div>
+    <section aria-labelledby="redes-heading">
+      <div className="overflow-hidden rounded-3xl border border-white/80 bg-white shadow-[0_16px_40px_rgba(0,0,0,0.35)]">
+        {/* Topo vermelho */}
+        <div className="flex items-center justify-between bg-red-700 px-5 py-3">
+          <div>
+            <p
+              id="redes-heading"
+              className="text-xs font-semibold tracking-[0.18em] text-red-100"
+            >
+              REDES OFICIAIS
+            </p>
+            <p className="text-[11px] text-red-100/80">
+              Instagram oficial da Comissão de Aprovados.
+            </p>
+          </div>
 
-      {/* corpo branco */}
-      <div className="px-5 pb-4 pt-3">
-        <p className="mb-3 text-[11px] text-gray-600 md:text-xs">
-          Comunicados rápidos, bastidores das reuniões e chamadas para ações
-          coletivas.
-        </p>
-
-        <div className="grid gap-3 md:grid-cols-2">
-          {/* destaque */}
           <Link
             href={INSTAGRAM_URL}
             target="_blank"
-            className="group relative overflow-hidden rounded-2xl border border-slate-100 bg-white px-4 py-3 shadow-[0_14px_28px_rgba(15,23,42,0.08)] md:row-span-2"
+            className="rounded-full bg-white px-3 py-1 text-[11px] font-medium text-red-700 shadow-sm hover:bg-red-50"
           >
-            <div className="absolute inset-x-[-25%] -top-6 h-8 bg-gradient-to-b from-slate-100 via-white to-transparent opacity-80 blur-md" />
-            <div className="relative flex h-full flex-col justify-between">
-              <div>
-                <p className="text-[11px] font-medium text-gray-500">
-                  @aprovados_tjaa
-                </p>
-                <h3 className="mt-1 text-sm font-semibold text-gray-900">
-                  Post oficial em destaque
-                </h3>
-                <p className="mt-1 text-[11px] text-gray-600">
-                  Em breve, os posts reais serão carregados automaticamente do
-                  Instagram da Comissão.
-                </p>
-              </div>
-              <p className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold text-tjaa-red">
-                Ver no Instagram
-                <span aria-hidden>↗</span>
-              </p>
-            </div>
+            Abrir perfil oficial
           </Link>
-
-          {instagramPlaceholders.map((post) => (
-            <Link
-              key={post.id}
-              href={INSTAGRAM_URL}
-              target="_blank"
-              className="group relative overflow-hidden rounded-2xl border border-slate-100 bg-white px-4 py-3 shadow-[0_10px_20px_rgba(15,23,42,0.06)]"
-            >
-              <div className="relative space-y-1">
-                <p className="text-[11px] font-medium text-gray-500">
-                  @aprovados_tjaa
-                </p>
-                <h3 className="text-sm font-semibold text-gray-900">
-                  {post.title}
-                </h3>
-                <p className="text-[11px] text-gray-600">
-                  Conteúdo será integrado automaticamente em breve.
-                </p>
-              </div>
-            </Link>
-          ))}
         </div>
 
-        <p className="mt-3 text-[10px] text-gray-500">
-          * Integração oficial com o Instagram será ativada quando o painel privado
-          estiver online.
-        </p>
+        {/* Corpo branco */}
+        <div className="space-y-4 px-5 pb-5 pt-4 text-sm">
+          <p className="text-xs text-zinc-600">
+            Comunicados rápidos, bastidores das reuniões e chamadas para ações coletivas.
+          </p>
+
+          <div className="space-y-3">
+            {/* Card principal */}
+            <article className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 shadow-sm">
+              <p className="text-[11px] font-semibold text-zinc-500">
+                @aprovados_tjaa
+              </p>
+              <h3 className="mt-1 text-sm font-semibold text-zinc-900">
+                Post oficial em destaque
+              </h3>
+              <p className="mt-1 text-xs text-zinc-600">
+                Em breve, os posts reais serão carregados automaticamente do Instagram da Comissão.
+              </p>
+              <Link
+                href={INSTAGRAM_URL}
+                target="_blank"
+                className="mt-2 inline-flex text-[11px] font-medium text-red-700 hover:text-red-800"
+              >
+                Ver no Instagram ↗
+              </Link>
+            </article>
+
+            {/* Placeholders para próximos posts */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {["Post oficial #1", "Post oficial #2", "Post oficial #3", "Post oficial #4"].map(
+                (title) => (
+                  <article
+                    key={title}
+                    className="rounded-2xl border border-zinc-200 bg-white px-3 py-3 text-xs shadow-sm"
+                  >
+                    <p className="text-[11px] font-semibold text-zinc-500">
+                      @aprovados_tjaa
+                    </p>
+                    <h3 className="mt-1 font-semibold text-zinc-900">
+                      {title}
+                    </h3>
+                    <p className="mt-1 text-[11px] text-zinc-600">
+                      Conteúdo será integrado automaticamente em breve.
+                    </p>
+                  </article>
+                ),
+              )}
+            </div>
+
+            <p className="pt-1 text-[10px] text-zinc-500">
+              * Integração oficial com o Instagram será ativada quando o painel privado estiver online.
+            </p>
+          </div>
+        </div>
       </div>
     </section>
   );
 }
 
-/* ================= MODAL AUTH ================= */
+/* MODAL DE LOGIN / CADASTRO ---------------------------------------------- */
 
-function AuthModal({ onClose }: { onClose: () => void }) {
-  const [mode, setMode] = useState<"login" | "signup">("login");
+function AuthModal(props: {
+  activeTab: "login" | "signUp";
+  onTabChange: (tab: "login" | "signUp") => void;
+  onClose: () => void;
+}) {
+  const { activeTab, onTabChange, onClose } = props;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-3">
-      <div className="relative w-full max-w-lg rounded-3xl border border-white/30 bg-gradient-to-b from-white/98 via-white to-[#fff4f4] p-5 shadow-[0_40px_100px_rgba(15,23,42,0.8)] backdrop-blur-md">
-        {/* Header */}
-        <div className="mb-4 flex items-center gap-3">
-          <div className="flex flex-col">
-            <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-              Ambiente do aprovado
-            </span>
-            <span className="font-heading text-sm font-semibold text-gray-900">
-              Acesse com seu e-mail cadastrado
-            </span>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 backdrop-blur-sm"
+      aria-modal="true"
+      role="dialog"
+    >
+      <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-white/80 bg-gradient-to-br from-black via-zinc-900 to-zinc-950 px-6 pb-6 pt-5 text-zinc-50 shadow-[0_32px_60px_rgba(0,0,0,0.65)]">
+        {/* Header do modal */}
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-[11px] font-semibold tracking-[0.22em] text-red-300">
+              AMBIENTE DO APROVADO
+            </p>
+            <h2 className="text-xl font-semibold">Acesso restrito · Validado por e-mail oficial</h2>
           </div>
-
           <button
             type="button"
             onClick={onClose}
-            className="ml-auto rounded-full bg-slate-100 px-3 py-1 text-[11px] text-gray-600 hover:bg-slate-200"
+            className="rounded-full border border-white/20 p-1 text-zinc-400 hover:text-white"
+            aria-label="Fechar modal de autenticação"
           >
-            Fechar
+            ✕
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="mb-4 inline-flex rounded-full bg-slate-100 p-1">
+        <div className="mt-4 flex gap-2 text-sm">
           <button
             type="button"
-            onClick={() => setMode("login")}
-            className={`rounded-full px-4 py-1.5 text-xs font-semibold ${
-              mode === "login"
-                ? "bg-tjaa-red text-white shadow-sm"
-                : "text-gray-700"
+            onClick={() => onTabChange("login")}
+            className={`flex-1 rounded-full px-4 py-2 font-semibold transition ${
+              activeTab === "login"
+                ? "bg-white text-zinc-900"
+                : "bg-white/10 text-white/70 hover:bg-white/20"
             }`}
           >
-            Entrar
+            Já sou aprovado (login)
           </button>
           <button
             type="button"
-            onClick={() => setMode("signup")}
-            className={`rounded-full px-4 py-1.5 text-xs font-semibold ${
-              mode === "signup"
-                ? "bg-tjaa-red text-white shadow-sm"
-                : "text-gray-700"
+            onClick={() => onTabChange("signUp")}
+            className={`flex-1 rounded-full px-4 py-2 font-semibold transition ${
+              activeTab === "signUp"
+                ? "bg-white text-zinc-900"
+                : "bg-white/10 text-white/70 hover:bg-white/20"
             }`}
           >
-            Criar cadastro
+            Quero liberar meu acesso
           </button>
         </div>
 
-        {mode === "login" ? <LoginForm /> : <SignupInfo />}
+        {/* Conteúdo do formulário */}
+        <div className="mt-5 space-y-4 text-sm">
+          {activeTab === "login" ? (
+            <>
+              <p className="text-zinc-200">
+                Informe seu e-mail usado no concurso TJAA TRT-2. Enviremos um link de acesso com validação por ID de candidato.
+              </p>
+              <label className="block space-y-1">
+                <span className="text-[12px] text-zinc-400">E-mail cadastrado</span>
+                <input
+                  type="email"
+                  className="w-full rounded-2xl border border-white/20 bg-white/10 px-4 py-2 text-white placeholder:text-white/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500"
+                  placeholder="seuemail@exemplo.com"
+                />
+              </label>
+              <button
+                type="button"
+                className="w-full rounded-full bg-red-600 px-5 py-3 text-sm font-semibold text-white shadow-[0_18px_32px_rgba(127,29,29,0.7)] transition hover:bg-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500"
+              >
+                Receber link de acesso
+              </button>
+              <p className="text-[11px] text-zinc-400">
+                Atenção: somente aprovados confirmados conseguem acessar enquanto o painel estiver em beta.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-zinc-200">
+                Envie seu e-mail e ID de candidato para liberar o acesso. Um membro da Comissão confirmará seus dados e ativará seu perfil.
+              </p>
+              <label className="block space-y-1">
+                <span className="text-[12px] text-zinc-400">E-mail do concurso</span>
+                <input
+                  type="email"
+                  className="w-full rounded-2xl border border-white/20 bg-white/10 px-4 py-2 text-white placeholder:text-white/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500"
+                  placeholder="seuemail@exemplo.com"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-[12px] text-zinc-400">ID de candidato (Caderno de provas)</span>
+                <input
+                  type="text"
+                  className="w-full rounded-2xl border border-white/20 bg-white/10 px-4 py-2 text-white placeholder:text-white/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500"
+                  placeholder="Ex.: TJAA-0000"
+                />
+              </label>
+              <button
+                type="button"
+                className="w-full rounded-full bg-white px-5 py-3 text-sm font-semibold text-zinc-900 shadow-[0_18px_32px_rgba(0,0,0,0.45)] transition hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+              >
+                Enviar para validação
+              </button>
+              <p className="text-[11px] text-zinc-400">
+                Após validação, o acesso é ativado e enviado automaticamente para seu e-mail.
+              </p>
+            </>
+          )}
+        </div>
       </div>
-    </div>
-  );
-}
-
-function LoginForm() {
-  return (
-    <form
-      className="space-y-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        // integração com Supabase Auth virá depois
-      }}
-    >
-      <div className="space-y-1">
-        <label className="text-xs font-medium text-gray-800">E-mail</label>
-        <input
-          type="email"
-          className="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-gray-900 outline-none ring-0 placeholder:text-gray-400 focus:border-tjaa-red focus:ring-2 focus:ring-tjaa-red/40"
-          placeholder="seu@email.com"
-        />
-      </div>
-
-      <div className="space-y-1">
-        <label className="text-xs font-medium text-gray-800">Senha</label>
-        <input
-          type="password"
-          className="w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-gray-900 outline-none ring-0 placeholder:text-gray-400 focus:border-tjaa-red focus:ring-2 focus:ring-tjaa-red/40"
-          placeholder="••••••••"
-        />
-      </div>
-
-      <button
-        type="submit"
-        className="mt-2 inline-flex w-full items-center justify-center rounded-full bg-tjaa-red px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-red-900/35 transition hover:bg-tjaa-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-tjaa-red/70"
-      >
-        Entrar
-      </button>
-
-      <p className="mt-2 text-[11px] text-gray-600">
-        Em breve, o login será vinculado automaticamente ao seu ID de candidato
-        na lista de aprovados.
-      </p>
-    </form>
-  );
-}
-
-function SignupInfo() {
-  return (
-    <div className="space-y-3 text-sm text-gray-800">
-      <p className="text-[13px]">
-        No cadastro, você vai vincular seu login ao seu nome na lista oficial de
-        aprovados do TRT-2.
-      </p>
-      <ul className="list-disc space-y-1 pl-5 text-[13px]">
-        <li>Informar e-mail e criar uma senha de acesso.</li>
-        <li>
-          Buscar seu nome na lista de aprovados e confirmar seu ID de candidato.
-        </li>
-        <li>
-          Preencher dados de contato (e-mail, telefone, redes sociais), visíveis
-          apenas para a Comissão.
-        </li>
-      </ul>
-      <p className="text-[12px] text-gray-600">
-        Essas informações serão utilizadas apenas para organização interna da
-        Comissão e comunicação com os aprovados.
-      </p>
     </div>
   );
 }
