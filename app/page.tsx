@@ -70,7 +70,9 @@ function HeroSection({ onOpenModal }: { onOpenModal: () => void }) {
             </h1>
 
             <p className="max-w-2xl text-xs text-red-50/90 sm:text-sm lg:text-[0.95rem]">
-              Comissão de aprovados do Tribunal Regional do Trabalho da 2ª Região para o cargo de Técnico Judiciário – Área Administrativa (TJAA), concurso de 2025. Site criado para controle de listas, TDs, vagas, nomeações e demais movimentações.
+              Comissão de aprovados do Tribunal Regional do Trabalho da 2ª Região para o cargo de Técnico Judiciário – Área Administrativa (TJAA), concurso de 2025.
+               
+              Site criado para controle de listas, TDs, vagas, nomeações e demais movimentações.
             </p>
           </div>
         </div>

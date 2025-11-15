@@ -14,7 +14,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Aprovados TRT da 2ª Região",
+  title: "APROVADOS TRT DA 2ª REGIÃO",
   description:
     "Comissão de aprovados do TRT da 2ª Região para o cargo de Técnico Judiciário - Área Administrativa (TJAA), concurso 2025. Controle de listas, TDs, vacâncias, nomeações, PCIs e outras movimentações.",
 };
