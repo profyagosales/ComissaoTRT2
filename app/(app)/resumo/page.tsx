@@ -20,7 +20,7 @@ type UserProfileRow = {
 }
 
 export default async function ResumoPage() {
-  const supabase = createSupabaseServerClient()
+  const supabase = await createSupabaseServerClient()
 
   const {
     data: { session },

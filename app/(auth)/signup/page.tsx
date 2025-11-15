@@ -172,6 +172,7 @@ export default function SignupPage() {
                 required
                 value={email}
                 onChange={e => setEmail(e.target.value)}
+                autoComplete="email"
                 className="h-11 w-full rounded-xl border border-neutral-400 bg-neutral-300/95 px-3 text-sm text-neutral-900 placeholder:text-neutral-600 shadow-sm focus:border-neutral-800 focus:outline-none focus:ring-2 focus:ring-neutral-800"
                 placeholder="seuemail@exemplo.com"
               />
@@ -184,6 +185,7 @@ export default function SignupPage() {
                 required
                 value={password}
                 onChange={e => setPassword(e.target.value)}
+                autoComplete="new-password"
                 className="h-11 w-full rounded-xl border border-neutral-400 bg-neutral-300/95 px-3 text-sm text-neutral-900 placeholder:text-neutral-600 shadow-sm focus:border-neutral-800 focus:outline-none focus:ring-2 focus:ring-neutral-800"
                 placeholder="Defina uma senha segura"
               />

@@ -25,7 +25,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="pt-BR">
+    <html lang="pt-BR" data-scroll-behavior="smooth">
       <body
         className={`${montserrat.variable} ${inter.variable} min-h-screen bg-zinc-200 font-body text-neutral-900 antialiased`}
       >
