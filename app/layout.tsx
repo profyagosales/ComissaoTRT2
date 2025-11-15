@@ -27,7 +27,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body
-        className={`${montserrat.variable} ${inter.variable} font-body min-h-screen bg-[#f5f3f0] text-[#111111] antialiased`}
+        className={`${montserrat.variable} ${inter.variable} font-body min-h-screen bg-[#d4d4d8] text-[#111111] antialiased`}
       >
         {children}
       </body>

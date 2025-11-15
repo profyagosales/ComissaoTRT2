@@ -47,17 +47,16 @@ export default function HomePage() {
 
   return (
     <main>
-      {/* Top bar preta */}
-      <div className="w-full border-b border-black bg-black">
-        <div className="mx-auto flex max-w-[1440px] items-center justify-end px-4 py-1.5 text-[11px] text-white md:text-xs">
+      <header className="w-full border-b border-tjaa-red/40 bg-tjaa-red text-white">
+        <div className="mx-auto flex max-w-[1440px] items-center justify-end px-4 py-1.5 text-[11px] md:px-6">
           <a
             href={`mailto:${COMISSAO_EMAIL}`}
-            className="underline-offset-2 hover:underline"
+            className="font-medium underline-offset-2 hover:underline"
           >
             Entre em contato com a Comissão
           </a>
         </div>
-      </div>
+      </header>
 
       {/* Conteúdo principal */}
       <section className="mx-auto flex max-w-[1440px] flex-col gap-6 px-2 pb-10 pt-4 md:gap-7 md:px-4 md:pb-14 md:pt-6">
@@ -78,21 +77,21 @@ export default function HomePage() {
 
 function HeroSection({ onOpenAuthModal }: { onOpenAuthModal: () => void }) {
   return (
-    <section className="relative overflow-hidden rounded-[32px] border border-black/15 bg-[#050507] text-white shadow-[0_28px_80px_rgba(15,23,42,0.9)]">
-      {/* Fundo: preto + vermelho SP */}
+    <section className="relative overflow-hidden rounded-[32px] border border-black/10 bg-white shadow-[0_24px_60px_rgba(15,23,42,0.45)]">
+      {/* gradiente horizontal branco -> vermelho */}
       <div
         className="pointer-events-none absolute inset-0"
         style={{
           backgroundImage:
-            "radial-gradient(circle at 0% 0%, rgba(248,113,113,0.9), transparent 55%), radial-gradient(circle at 80% 0%, rgba(127,29,29,0.85), transparent 55%), linear-gradient(115deg,#020617,#111827,#7f1d1d)",
+            "linear-gradient(90deg,#ffffff 0%,#fee2e2 25%,#f97373 55%,#7f1d1d 100%)",
         }}
       />
 
-      {/* Faixa calçadão (depois podemos trocar por SVG real) */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-[linear-gradient(135deg,#000_25%,#fff_25%,#fff_50%,#000_50%,#000_75%,#fff_75%,#fff_100%)] bg-[length:32px_32px] opacity-[0.10]" />
+      {/* leve textura diagonal inspirada no calçadão, bem sutil */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-[linear-gradient(135deg,rgba(0,0,0,0.16)_25%,rgba(0,0,0,0)_25%,rgba(0,0,0,0)_50%,rgba(0,0,0,0.16)_50%,rgba(0,0,0,0.16)_75%,rgba(0,0,0,0)_75%,rgba(0,0,0,0)_100%)] bg-[length:28px_28px] opacity-[0.26]" />
 
-      <div className="relative grid items-center gap-6 px-4 py-5 md:grid-cols-[minmax(0,2.4fr)_minmax(0,1.6fr)] md:px-8 md:py-6">
-        {/* Lado esquerdo */}
+      <div className="relative grid items-center gap-6 px-4 py-6 md:grid-cols-[minmax(0,2.4fr)_minmax(0,1.6fr)] md:px-8 md:py-7">
+        {/* lado esquerdo */}
         <div className="flex items-start gap-5">
           <div className="relative shrink-0">
             <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-white via-tjaa-red to-black p-[3px] md:h-24 md:w-24">
@@ -109,9 +108,9 @@ function HeroSection({ onOpenAuthModal }: { onOpenAuthModal: () => void }) {
             </div>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-3 text-white">
             <div>
-              <h1 className="font-heading text-2xl font-extrabold tracking-tight text-white md:text-[28px]">
+              <h1 className="font-heading text-2xl font-extrabold tracking-tight md:text-[28px]">
                 Aprovados TRT da 2ª Região
               </h1>
               <p className="font-heading text-[11px] uppercase tracking-[0.24em] text-gray-100 md:text-xs">
@@ -125,20 +124,20 @@ function HeroSection({ onOpenAuthModal }: { onOpenAuthModal: () => void }) {
               para o cargo de Técnico Judiciário – Área Administrativa (TJAA),
               concurso de 2025.
             </p>
-            <p className="text-xs text-gray-200 md:text-[13px]">
-              Site criado pela Comissão para controle de listas, Termos de Desistência
-              (TDs), vacâncias, nomeações, PCIs e outras movimentações. Organizados,
-              somos mais fortes.
+            <p className="text-xs text-gray-100 md:text-[13px]">
+              Site criado pela Comissão para controle de listas, Termos de
+              Desistência (TDs), vacâncias, nomeações, PCIs e outras movimentações.
+              Organizados, somos mais fortes.
             </p>
           </div>
         </div>
 
-        {/* CTA */}
-        <div className="relative flex flex-col gap-3 rounded-2xl border border-white/18 bg-white/10 px-4 py-4 shadow-[0_22px_50px_rgba(0,0,0,0.7)] backdrop-blur-xl md:px-5 md:py-4">
-          <div className="pointer-events-none absolute inset-x-[-20%] -top-10 h-10 bg-gradient-to-b from-white/80 via-white/25 to-transparent opacity-90 blur-xl" />
+        {/* CTA do aprovado */}
+        <div className="relative flex flex-col gap-3 rounded-2xl border border-white/40 bg-black/35 px-4 py-4 shadow-[0_22px_50px_rgba(0,0,0,0.8)] backdrop-blur-xl md:px-5 md:py-4">
+          <div className="pointer-events-none absolute inset-x-[-20%] -top-10 h-10 bg-gradient-to-b from-white/80 via-white/25 to-transparent opacity-80 blur-xl" />
 
-          <div className="relative space-y-1">
-            <h2 className="font-heading text-sm font-semibold text-white md:text-base">
+          <div className="relative space-y-1 text-white">
+            <h2 className="font-heading text-sm font-semibold md:text-base">
               Ambiente do aprovado
             </h2>
             <p className="text-xs text-gray-100 md:text-[13px]">
@@ -147,11 +146,10 @@ function HeroSection({ onOpenAuthModal }: { onOpenAuthModal: () => void }) {
             </p>
           </div>
 
-          {/* Botão vermelho forte, bem legível */}
           <button
             type="button"
             onClick={onOpenAuthModal}
-            className="relative inline-flex items-center justify-center rounded-full bg-tjaa-red px-6 py-2.5 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(127,29,29,0.8)] transition hover:bg-tjaa-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/90"
+            className="relative inline-flex items-center justify-center rounded-full bg-tjaa-red px-6 py-2.5 text-sm font-semibold text-white shadow-[0_14px_34px_rgba(127,29,29,0.9)] transition hover:bg-tjaa-red-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
           >
             Entrar no ambiente do aprovado
           </button>
@@ -178,35 +176,36 @@ function StatsSection() {
   const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
-    const id = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % stats.length);
-    }, 7000);
+    const id = setInterval(
+      () => setCurrentIndex((prev) => (prev + 1) % stats.length),
+      7000,
+    );
     return () => clearInterval(id);
   }, []);
 
   const current = stats[currentIndex];
 
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-black/5 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
-      <div className="relative flex items-center justify-between gap-2 border-b border-black/5 px-5 py-3 md:px-6">
+    <section className="relative overflow-hidden rounded-3xl border border-black/10 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.25)]">
+      {/* topo vermelho */}
+      <div className="flex items-center justify-between gap-2 bg-tjaa-red px-5 py-3 text-white md:px-6">
         <div>
-          <h2 className="font-heading text-sm font-semibold text-gray-900 md:text-base">
+          <h2 className="font-heading text-sm font-semibold md:text-base">
             Resumo do concurso TJAA TRT-2
           </h2>
-          <p className="text-[11px] text-gray-600 md:text-xs">
+          <p className="text-[11px] text-red-100 md:text-xs">
             Visão geral pública. Os dados são atualizados pela Comissão.
           </p>
         </div>
-        <span className="rounded-full border border-tjaa-red/30 bg-tjaa-red/8 px-3 py-1 text-[11px] font-medium text-tjaa-red">
+        <span className="rounded-full border border-red-200/60 bg-red-100/15 px-3 py-1 text-[11px] font-medium text-red-50">
           Beta público
         </span>
       </div>
 
-      <div className="relative px-4 pb-4 pt-3 md:px-5">
-        <article className="relative h-44 rounded-2xl border border-slate-100 bg-gradient-to-br from-white via-slate-50 to-[#f9fafb] px-5 py-4 shadow-[0_14px_30px_rgba(15,23,42,0.06)] md:h-48">
+      {/* corpo branco */}
+      <div className="px-4 pb-4 pt-3 md:px-5">
+        <article className="relative h-44 rounded-2xl border border-slate-100 bg-white px-5 py-4 shadow-[0_14px_28px_rgba(15,23,42,0.08)] md:h-48">
           <div className="absolute inset-y-4 left-0 w-[3px] rounded-full bg-gradient-to-b from-tjaa-red to-black" />
-
-          <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-black/5 via-transparent to-transparent" />
 
           <div className="relative ml-3 flex h-full flex-col justify-between">
             <div className="flex items-center justify-between gap-3">
@@ -233,7 +232,6 @@ function StatsSection() {
           </div>
         </article>
 
-        {/* bullets */}
         <div className="mt-3 flex items-center justify-center gap-2">
           {stats.map((item, index) => (
             <button
@@ -245,7 +243,6 @@ function StatsSection() {
                   ? "w-6 bg-tjaa-red"
                   : "w-2.5 bg-slate-300 hover:bg-slate-400"
               }`}
-              aria-label={`Ir para indicador ${index + 1}`}
             />
           ))}
         </div>
@@ -258,41 +255,41 @@ function StatsSection() {
 
 function InstagramSection() {
   return (
-    <section className="relative flex flex-col rounded-3xl border border-black/5 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.08)]">
-      <div className="relative flex items-center justify-between gap-2 border-b border-black/5 px-5 py-3 md:px-6">
+    <section className="relative flex flex-col rounded-3xl border border-black/10 bg-white shadow-[0_18px_40px_rgba(15,23,42,0.25)]">
+      {/* topo vermelho */}
+      <div className="flex items-center justify-between gap-2 bg-tjaa-red px-5 py-3 text-white md:px-6">
         <div>
-          <p className="font-heading text-[11px] uppercase tracking-[0.22em] text-gray-500">
+          <p className="font-heading text-[11px] uppercase tracking-[0.22em] text-red-100">
             Redes oficiais
           </p>
-          <h2 className="font-heading text-sm font-semibold text-gray-900 md:text-base">
+          <h2 className="font-heading text-sm font-semibold md:text-base">
             Instagram da Comissão
           </h2>
         </div>
         <Link
           href={INSTAGRAM_URL}
           target="_blank"
-          className="rounded-full border border-black/10 bg-slate-50 px-3 py-1.5 text-[11px] font-medium text-gray-900 shadow-sm hover:bg-slate-100 md:px-4 md:text-xs"
+          className="rounded-full border border-red-100 bg-red-100/10 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-red-100/20 md:px-4 md:text-xs"
         >
           Abrir perfil oficial
         </Link>
       </div>
 
-      <div className="relative px-5 pb-4 pt-3">
+      {/* corpo branco */}
+      <div className="px-5 pb-4 pt-3">
         <p className="mb-3 text-[11px] text-gray-600 md:text-xs">
           Comunicados rápidos, bastidores das reuniões e chamadas para ações
           coletivas.
         </p>
 
-        {/* 1 card maior + 3 menores */}
         <div className="grid gap-3 md:grid-cols-2">
-          {/* Destaque */}
+          {/* destaque */}
           <Link
             href={INSTAGRAM_URL}
             target="_blank"
-            className="group relative overflow-hidden rounded-2xl border border-slate-100 bg-gradient-to-br from-[#fef2f2] via-white to-[#f3f4ff] px-4 py-3 shadow-[0_14px_30px_rgba(15,23,42,0.08)] md:row-span-2"
+            className="group relative overflow-hidden rounded-2xl border border-slate-100 bg-white px-4 py-3 shadow-[0_14px_28px_rgba(15,23,42,0.08)] md:row-span-2"
           >
-            <div className="pointer-events-none absolute inset-x-[-25%] -top-8 h-10 bg-gradient-to-b from-white/90 via-white/35 to-transparent opacity-90 blur-md" />
-            <div className="absolute inset-0 bg-gradient-to-br from-transparent via-black/6 to-black/20 opacity-0 transition group-hover:opacity-100" />
+            <div className="absolute inset-x-[-25%] -top-6 h-8 bg-gradient-to-b from-slate-100 via-white to-transparent opacity-80 blur-md" />
             <div className="relative flex h-full flex-col justify-between">
               <div>
                 <p className="text-[11px] font-medium text-gray-500">
@@ -313,16 +310,13 @@ function InstagramSection() {
             </div>
           </Link>
 
-          {/* Demais posts placeholders */}
           {instagramPlaceholders.map((post) => (
             <Link
               key={post.id}
               href={INSTAGRAM_URL}
               target="_blank"
-              className="group relative overflow-hidden rounded-2xl border border-slate-100 bg-gradient-to-br from-white via-slate-50 to-white px-4 py-3 shadow-[0_10px_22px_rgba(15,23,42,0.07)]"
+              className="group relative overflow-hidden rounded-2xl border border-slate-100 bg-white px-4 py-3 shadow-[0_10px_20px_rgba(15,23,42,0.06)]"
             >
-              <div className="absolute inset-x-[-25%] -top-6 h-8 bg-gradient-to-b from-white/80 via-white/30 to-transparent opacity-80 blur-md" />
-              <div className="absolute inset-0 bg-gradient-to-br from-transparent via-black/4 to-black/15 opacity-0 transition group-hover:opacity-100" />
               <div className="relative space-y-1">
                 <p className="text-[11px] font-medium text-gray-500">
                   @aprovados_tjaa
