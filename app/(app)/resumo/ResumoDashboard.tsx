@@ -1,6 +1,9 @@
 'use client'
 
-import { HeroCard, TitledCard } from '@/src/components/ui/AppCards'
+import { ResumoHero } from '@/src/components/resumo/ResumoHero'
+import type { ResumoSliderData } from '@/src/components/resumo/ResumoSlider'
+import { ConcursoInfoSlider } from '@/src/components/resumo/ConcursoInfoSlider'
+import { UltimasNotificacoesCard } from '@/src/components/resumo/UltimasNotificacoesCard'
 import { ComissaoFab } from '@/src/app/(app)/resumo/ComissaoFab'
 import type { CandidateResumoData } from '@/src/app/(app)/resumo/loadResumoData'
 import {
@@ -14,12 +17,45 @@ type Props = {
   isComissao: boolean
   userId: string
   profileContact?: {
+    email?: string | null
     telefone?: string | null
-    telefone_whatsapp?: string | null
     instagram?: string | null
     facebook?: string | null
     outras_redes?: string | null
   }
+}
+
+const SISTEMA_LABELS: Record<string, string> = {
+  AC: 'Ampla concorrência',
+  PCD: 'Pessoa com deficiência',
+  PPP: 'Pessoas pretas e pardas',
+  INDIGENA: 'Indígena',
+}
+
+function buildTotaisTDs(data: CandidateResumoData): ResumoSliderData['totaisTDs'] {
+  const totals = {
+    total: 0,
+    ampla: 0,
+    pcd: 0,
+    ppp: 0,
+    indigena: 0,
+  }
+
+  data.ultimosTDs.forEach(td => {
+    totals.total += 1
+    const sistema = (td.sistema_concorrencia ?? '').toUpperCase()
+    if (sistema === 'PCD') {
+      totals.pcd += 1
+    } else if (sistema === 'PPP') {
+      totals.ppp += 1
+    } else if (sistema === 'INDIGENA') {
+      totals.indigena += 1
+    } else {
+      totals.ampla += 1
+    }
+  })
+
+  return totals
 }
 
 export default function ResumoDashboard({
@@ -27,144 +63,121 @@ export default function ResumoDashboard({
   isComissao,
   userId,
   profileContact,
-}: Props) {
-  const { candidate, posicoes, concursoResumo, painelAtual } = data
+}: Props) { 
+  const {
+    candidate,
+    posicoes,
+    concursoResumo,
+    painelAtual,
+    ultimasNotificacoes,
+    outrasAprovacoesCount,
+  } = data
   const contato = profileContact ?? {}
-  const initials = getInitials(candidate.nome)
   const ordemAtual =
     (candidate as { ordem_nomeacao_atual?: number | null })?.ordem_nomeacao_atual ??
     candidate.ordem_nomeacao_base ??
     '—'
+  const perfilLabel = isComissao ? 'Perfil da comissão' : 'Perfil do aprovado'
+  const concorrenciaLabel =
+    SISTEMA_LABELS[candidate.sistema_concorrencia] ?? candidate.sistema_concorrencia
+  const contatoEmail = contato.email ?? 'Não informado'
+  const contatoTelefone = contato.telefone ?? 'Não informado'
+  const contatoRedes = 
+    [contato.instagram, contato.facebook, contato.outras_redes]
+      .filter(Boolean)
+      .join(' · ') || 'Não informado'
+  const outrasAprovacoesText = outrasAprovacoesCount
+    ? `${outrasAprovacoesCount} aprovação(ões) cadastrada(s) em outros concursos.`
+    : 'Nenhuma outra aprovação cadastrada ainda.'
+  const sliderData: ResumoSliderData = {
+    concorrenciaLabel,
+    ordemNomeacao: ordemAtual,
+    classificacaoOrigem: candidate.classificacao_lista ?? '—',
+    frenteOrdem: posicoes.candidatosNaFrenteOrdem ?? 0,
+    frenteSistema: posicoes.candidatosNaFrenteLista ?? 0,
+    totaisAprovados: {
+      total: concursoResumo.totalAprovados ?? 0,
+      ampla: concursoResumo.totalAprovadosAmpla ?? 0,
+      pcd: concursoResumo.totalAprovadosPcd ?? 0,
+      ppp: concursoResumo.totalAprovadosPpp ?? 0,
+      indigena: concursoResumo.totalAprovadosIndigena ?? 0,
+    },
+    totaisNomeados: {
+      total: concursoResumo.totalNomeados ?? 0,
+      ampla: concursoResumo.totalNomeadosAmpla ?? 0,
+      pcd: concursoResumo.totalNomeadosPcd ?? 0,
+      ppp: concursoResumo.totalNomeadosPpp ?? 0,
+      indigena: concursoResumo.totalNomeadosIndigena ?? 0,
+    },
+    totaisTDs: buildTotaisTDs(data),
+  }
 
   return (
-    <div className="flex flex-col gap-6 pb-16">
-      <HeroCard
-        left={
-          <div className="flex items-start gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-900 text-lg font-semibold text-red-50 shadow-md shadow-red-900/40">
-              {initials}
-            </div>
-            <div className="space-y-1">
-              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-red-100/80">
-                Resumo · Perfil do aprovado
-              </div>
-              <h1 className="text-xl font-semibold text-white">Olá, {candidate.nome || 'aprovado(a)'}!</h1>
-              <p className="text-sm text-red-50/90">
-                Sistema: <span className="font-semibold">{candidate.sistema_concorrencia}</span> · Classificação:{' '}
-                <span className="font-semibold">{candidate.classificacao_lista}</span> · Ordem base:{' '}
-                <span className="font-semibold">{ordemAtual}</span>
-              </p>
-            </div>
-          </div>
+    <main className="w-full px-2 sm:px-3 lg:px-4 xl:px-5 space-y-6 pb-16">
+      <ResumoHero
+        nome={candidate.nome}
+        email={contatoEmail}
+        telefone={contatoTelefone}
+        redesSociais={contatoRedes}
+        perfilLabel={perfilLabel}
+        sliderData={sliderData}
+        outrasAprovacoesText={outrasAprovacoesText}
+        editContactAction={
+          <EditarInfoModal
+            userId={userId}
+            initialTelefone={contato.telefone ?? undefined}
+            initialInstagram={contato.instagram}
+            initialFacebook={contato.facebook}
+            initialOutrasRedes={contato.outras_redes}
+            trigger={
+              <button className="inline-flex min-w-[150px] items-center justify-center rounded-full bg-[#C62828] px-6 py-2.5 text-sm font-semibold text-white shadow-[0_7px_20px_rgba(198,40,40,0.3)] transition-colors hover:bg-[#a71d1d]">
+                Editar contato
+              </button>
+            }
+          />
         }
-        right={
-          <div className="space-y-3 text-xs text-red-50/90">
-            <div className="font-semibold tracking-[0.22em] text-red-100/80">Seus detalhes</div>
-            <p>Contato preferencial: {contato.telefone_whatsapp ?? contato.telefone ?? 'Não informado'}</p>
-            <p>Instagram: {contato.instagram ?? 'Não informado'}</p>
-            <p>Facebook: {contato.facebook ?? 'Não informado'}</p>
-            <p>Outras redes: {contato.outras_redes ?? '—'}</p>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              <EditarInfoModal
-                userId={userId}
-                initialTelefone={contato.telefone_whatsapp ?? contato.telefone ?? undefined}
-                initialInstagram={contato.instagram}
-                initialFacebook={contato.facebook}
-                initialOutrasRedes={contato.outras_redes}
-                trigger={
-                  <span className="rounded-full bg-black/35 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-red-100 hover:bg-black/45">
-                    Editar contato
-                  </span>
-                }
-              />
-              <EnviarTdModal
-                candidateId={candidate.id}
-                trigger={
-                  <span className="rounded-full bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-red-700 shadow-sm shadow-black/10 hover:bg-red-50">
-                    Enviar TD
-                  </span>
-                }
-              />
-              <MinhasAprovacoesModal
-                candidateId={candidate.id}
-                trigger={
-                  <span className="rounded-full border border-white/40 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-red-50 hover:bg-white/10">
-                    Outras aprovações
-                  </span>
-                }
-              />
-              {isComissao ? (
-                <span className="rounded-full bg-white/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-red-50">
-                  Perfil: Comissão
-                </span>
-              ) : null}
-            </div>
-          </div>
+        enviarTdAction={
+          <EnviarTdModal
+            candidateId={candidate.id}
+            trigger={
+              <button
+                className="btn-td-pulse inline-flex min-w-[150px] items-center justify-center rounded-full border border-[#C62828] px-6 py-2.5 text-sm font-semibold shadow-[0_0_25px_rgba(198,40,40,0.4)] ring-2 ring-transparent transition-all duration-300 focus-visible:ring-2 focus-visible:ring-[#FFCDD2]"
+              >
+                Enviar TD
+              </button>
+            }
+          />
+        }
+        verEditarAprovacoesAction={
+          <MinhasAprovacoesModal
+            candidateId={candidate.id}
+            trigger={
+              <button className="inline-flex min-w-[150px] items-center justify-center rounded-full bg-[#C62828] px-6 py-2.5 text-sm font-semibold text-white shadow-[0_7px_20px_rgba(198,40,40,0.3)] transition-colors hover:bg-[#a71d1d]">
+                Ver/editar
+              </button>
+            }
+          />
+        }
+        novaAprovacaoAction={
+          <MinhasAprovacoesModal
+            candidateId={candidate.id}
+            trigger={
+              <button className="inline-flex min-w-[150px] items-center justify-center rounded-full bg-[#C62828] px-6 py-2.5 text-sm font-semibold text-white shadow-[0_7px_20px_rgba(198,40,40,0.3)] transition-colors hover:bg-[#a71d1d]">
+                + Aprovação
+              </button>
+            }
+          />
         }
       />
 
-      <TitledCard title="Candidatos na frente · Nomeação">
-        <div className="flex flex-col gap-2">
-          <div className="text-4xl font-semibold text-neutral-900">
-            {posicoes.candidatosNaFrenteOrdem}
-          </div>
-          <p className="text-sm text-neutral-600">
-            Considerando apenas TDs confirmados e nomeações registradas.
-          </p>
-        </div>
-      </TitledCard>
-
-      <TitledCard title="Candidatos na frente · Sua lista">
-        <div className="flex flex-col gap-2">
-          <div className="text-4xl font-semibold text-neutral-900">
-            {posicoes.candidatosNaFrenteLista}
-          </div>
-          <p className="text-sm text-neutral-600">Posição dentro da sua cota (AC, PCD, PPP, Indígena).</p>
-        </div>
-      </TitledCard>
-
-      <TitledCard title="Total de aprovados TJAA">
-        <p className="text-sm text-neutral-700">
-          Total: <strong>{concursoResumo.totalAprovados}</strong> · Ampla: {concursoResumo.totalAprovadosAmpla} · PCD:{' '}
-          {concursoResumo.totalAprovadosPcd} · PPP: {concursoResumo.totalAprovadosPpp} · Indígena:{' '}
-          {concursoResumo.totalAprovadosIndigena}
-        </p>
-      </TitledCard>
-
-      <TitledCard title="Total de nomeados">
-        <p className="text-sm text-neutral-700">
-          Total: <strong>{concursoResumo.totalNomeados}</strong> · Ampla: {concursoResumo.totalNomeadosAmpla} · PCD:{' '}
-          {concursoResumo.totalNomeadosPcd} · PPP: {concursoResumo.totalNomeadosPpp} · Indígena:{' '}
-          {concursoResumo.totalNomeadosIndigena}
-        </p>
-      </TitledCard>
-
-      {painelAtual ? (
-        <TitledCard title={`Painel ${painelAtual.mes}/${painelAtual.ano}`}>
-          <p className="text-sm text-neutral-700">
-            Vagas autorizadas: {painelAtual.vagas_autorizadas_trt2_tjaa ?? 0} · Cargos vagos totais:{' '}
-            {painelAtual.cargos_vagos_trt2_total ?? 0} (oner.: {painelAtual.cargos_vagos_trt2_onerosos ?? 0} · não oner.:
-            {painelAtual.cargos_vagos_trt2_nao_onerosos ?? 0})
-          </p>
-        </TitledCard>
-      ) : null}
-
-      <TitledCard title="Em breve" subtitle="Novos cards e notificações">
-        Em breve: notificações, nomeações, TDs, vacâncias e outros cards usando os dados já carregados.
-      </TitledCard>
+      <section className="grid gap-6 lg:grid-cols-2">
+        <ConcursoInfoSlider painelAtual={painelAtual} concursoResumo={concursoResumo} />
+        <UltimasNotificacoesCard notificacoes={ultimasNotificacoes} />
+      </section>
 
       <ComissaoFab isComissao={isComissao} />
-    </div>
+    </main>
   )
 }
 
-function getInitials(nome: string) {
-  if (!nome) return '?'
-  const parts = nome.trim().split(/\s+/)
-  if (parts.length === 1) return parts[0].charAt(0).toUpperCase()
-  return (
-    parts[0].charAt(0).toUpperCase() +
-    parts[parts.length - 1].charAt(0).toUpperCase()
-  )
-}
+

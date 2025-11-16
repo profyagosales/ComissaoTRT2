@@ -5,6 +5,24 @@ import { cookies } from 'next/headers'
 
 export async function createSupabaseServerClient() {
   const cookieStore = await cookies()
+  const canMutateCookies = typeof cookieStore.set === 'function'
+
+  const logCookieWarning = (error: unknown) => {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('Supabase cookie mutation skipped:', (error as Error).message)
+    }
+  }
+
+  const tryMutate = (mutate: () => void) => {
+    if (!canMutateCookies) {
+      return
+    }
+    try {
+      mutate()
+    } catch (error) {
+      logCookieWarning(error)
+    }
+  }
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -12,17 +30,26 @@ export async function createSupabaseServerClient() {
     {
       cookies: {
         get(name: string) {
-          return cookieStore.get(name)?.value
+          try {
+            return cookieStore.get(name)?.value
+          } catch (error) {
+            logCookieWarning(error)
+            return undefined
+          }
         },
         set(name: string, value: string, options: CookieOptions) {
-          cookieStore.set({ name, value, ...options })
+          tryMutate(() => {
+            cookieStore.set({ name, value, ...options })
+          })
         },
         remove(name: string, options: CookieOptions) {
-          cookieStore.set({
-            name,
-            value: '',
-            ...options,
-            maxAge: 0,
+          tryMutate(() => {
+            cookieStore.set({
+              name,
+              value: '',
+              ...options,
+              maxAge: 0,
+            })
           })
         },
       },

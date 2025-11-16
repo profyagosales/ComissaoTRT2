@@ -49,6 +49,7 @@ export default async function ResumoPage() {
       isComissao={isComissao}
       userId={user.id}
       profileContact={{
+        email: user.email,
         telefone: perfil.telefone,
         instagram: perfil.instagram,
         facebook: perfil.facebook,

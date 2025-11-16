@@ -97,6 +97,7 @@ export type CandidateResumoData = {
   ultimosTDs: UltimoTD[];
   ultimasVacancias: Vacancia[];
   ultimasNotificacoes: Notificacao[];
+  outrasAprovacoesCount: number;
 };
 
 export async function loadResumoData(
@@ -237,6 +238,18 @@ export async function loadResumoData(
     console.error(ultimasNotificacoesError);
   }
 
+  const {
+    count: outrasAprovacoesCount = 0,
+    error: outrasAprovacoesError,
+  } = await supabase
+    .from("outras_aprovacoes")
+    .select("id", { count: "exact", head: true })
+    .eq("candidate_id", candidateId);
+
+  if (outrasAprovacoesError) {
+    console.error(outrasAprovacoesError);
+  }
+
   return {
     candidate: {
       id: candidate.id,
@@ -255,5 +268,6 @@ export async function loadResumoData(
     ultimosTDs,
     ultimasVacancias,
     ultimasNotificacoes,
+    outrasAprovacoesCount,
   };
 }

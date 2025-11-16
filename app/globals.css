@@ -14,3 +14,26 @@
     @apply bg-[#f5f3f0] text-[#111111];
   }
 }
+
+@layer utilities {
+  .btn-td-pulse {
+    background-color: #c62828;
+    color: #ffffff;
+    animation: tdPulse 8s ease-in-out infinite;
+  }
+}
+
+@keyframes tdPulse {
+  0%,
+  45% {
+    background-color: #c62828;
+    color: #ffffff;
+    box-shadow: 0 0 28px rgba(198, 40, 40, 0.45);
+  }
+  55%,
+  100% {
+    background-color: #ffffff;
+    color: #c62828;
+    box-shadow: 0 0 14px rgba(198, 40, 40, 0.2);
+  }
+}
