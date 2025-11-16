@@ -3,8 +3,6 @@
 import { FormEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { supabaseBrowser } from '@/lib/supabase-browser'
-
 export default function LoginPage() {
   const router = useRouter()
 
@@ -18,15 +16,20 @@ export default function LoginPage() {
     setErrorMsg(null)
     setSubmitting(true)
 
-    const { error } = await supabaseBrowser.auth.signInWithPassword({
-      email,
-      password,
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
     })
+
+    const data = await response.json()
 
     setSubmitting(false)
 
-    if (error) {
-      setErrorMsg(error.message)
+    if (!response.ok) {
+      setErrorMsg(data?.error ?? 'Não foi possível entrar. Tente novamente.')
       return
     }
 
