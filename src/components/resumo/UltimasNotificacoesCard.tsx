@@ -22,9 +22,6 @@ export function UltimasNotificacoesCard({ notificacoes }: Props) {
       <div className="w-full h-[420px] rounded-[28px] bg-white/90 ring-1 ring-black/5 shadow-md shadow-black/10 flex flex-col overflow-hidden">
         <div className="bg-[#C62828] px-6 py-4 flex flex-col items-center justify-center text-center gap-1">
           <p className="text-xs font-semibold tracking-[0.15em] uppercase text-white">Últimas notificações</p>
-          {notificacoes.length > 0 && (
-            <span className="text-[10px] text-red-50/80">{notificacoes.length} recente(s)</span>
-          )}
         </div>
 
         <div className="flex-1 px-4 py-4 overflow-y-auto">

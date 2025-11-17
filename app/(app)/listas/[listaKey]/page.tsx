@@ -1,21 +1,22 @@
-import { redirect } from 'next/navigation'
+import { redirect, notFound } from 'next/navigation'
 
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { loadListasData, LISTA_KEYS, type ListaKey } from '@/features/listas/loadListasData'
 import { ListasDashboard } from '@/features/listas/ListasDashboard'
 
+function isListaKey(value: string): value is ListaKey {
+  return LISTA_KEYS.includes(value as ListaKey)
+}
+
 export const dynamic = 'force-dynamic'
 
-type ListasPageProps = {
-  searchParams?: {
-    lista?: string
+interface ListaDetalhePageProps {
+  params: {
+    listaKey: string
   }
 }
 
-export default async function ListasPage({ searchParams }: ListasPageProps) {
-  const rawKey = searchParams?.lista
-  const selectedListKey = rawKey && LISTA_KEYS.includes(rawKey as ListaKey) ? (rawKey as ListaKey) : undefined
-
+export default async function ListaDetalhePage({ params }: ListaDetalhePageProps) {
   const supabase = await createSupabaseServerClient()
 
   const {
@@ -32,7 +33,11 @@ export default async function ListasPage({ searchParams }: ListasPageProps) {
     .eq('user_id', session.user.id)
     .maybeSingle()
 
+  if (!isListaKey(params.listaKey)) {
+    notFound()
+  }
+
   const listasData = await loadListasData()
 
-  return <ListasDashboard data={listasData} isComissao={profile?.role === 'COMISSAO'} selectedListKey={selectedListKey} />
+  return <ListasDashboard data={listasData} isComissao={profile?.role === 'COMISSAO'} selectedListKey={params.listaKey} />
 }

@@ -13,9 +13,6 @@ type ResumoHeroProps = {
   sliderData: ResumoSliderData
   editContactAction: ReactNode
   enviarTdAction: ReactNode
-  outrasAprovacoesText: string
-  verEditarAprovacoesAction: ReactNode
-  novaAprovacaoAction: ReactNode
 }
 
 export function ResumoHero({
@@ -23,34 +20,19 @@ export function ResumoHero({
   email,
   telefone,
   redesSociais,
-  perfilLabel,
   sliderData,
   editContactAction,
   enviarTdAction,
-  outrasAprovacoesText,
-  verEditarAprovacoesAction,
-  novaAprovacaoAction,
 }: ResumoHeroProps) {
   const initials = getInitials(nome)
   const greetingName = getGreetingName(nome) || 'aprovado(a)'
 
   return (
-    <section
-      className="relative w-full overflow-hidden rounded-[32px] shadow-xl shadow-black/5 ring-1 ring-black/5"
-      style={{
-        backgroundImage: "url('/patterns/calcada-red-black1.png')",
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-      }}
-    >
-      <div className="relative z-10 flex flex-col gap-3 px-3 py-3 md:px-4 md:py-4 lg:flex-row lg:items-stretch lg:gap-3">
-        <div className="flex w-full flex-col lg:w-[460px]">
+    <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-stretch">
+      <div className="flex w-full flex-col lg:w-[60%]">
           <div className="h-full rounded-[22px] border border-black/20 bg-[#040816]/90 px-3 py-3 shadow-xl shadow-black/30 flex flex-col gap-3 text-white">
             <div>
-              <p className="text-center text-[10px] font-semibold tracking-[0.35em] uppercase text-[#FF6B6B]">
-                {perfilLabel}
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <div className="h-16 w-16 rounded-full bg-[#C62828] text-white flex items-center justify-center text-xl font-semibold shadow-md shadow-black/40">
                   {initials}
                 </div>
@@ -84,29 +66,12 @@ export function ResumoHero({
               {enviarTdAction}
             </div>
           </div>
-        </div>
-
-        <div className="flex flex-1 basis-full items-stretch lg:flex-auto">
-          <ResumoSlider data={sliderData} />
-        </div>
-
-        <aside className="w-full lg:w-[340px]">
-          <div className="h-full rounded-[22px] bg-white/90 text-slate-900 px-5 py-5 ring-1 ring-black/5 shadow-md shadow-black/10 flex flex-col justify-between gap-4">
-            <div className="text-center">
-              <p className="text-[10px] font-semibold tracking-[0.35em] uppercase text-[#C62828]">
-                Outras aprovações
-              </p>
-              <p className="mt-2 text-xs leading-relaxed text-slate-600">{outrasAprovacoesText}</p>
-            </div>
-
-            <div className="mt-auto flex w-full flex-wrap items-center justify-center gap-3 text-center sm:flex-nowrap sm:justify-between">
-              {verEditarAprovacoesAction}
-              {novaAprovacaoAction}
-            </div>
-          </div>
-        </aside>
       </div>
-    </section>
+
+      <div className="flex flex-1 basis-full items-stretch lg:w-[40%]">
+        <ResumoSlider data={sliderData} />
+      </div>
+    </div>
   )
 }
 

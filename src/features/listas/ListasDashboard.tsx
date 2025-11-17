@@ -1,10 +1,11 @@
 'use client'
 
+import Link from 'next/link'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Shield, ShieldCheck, Sparkles, Target, Users, type LucideIcon } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 
-import type { ListasData, ListaCandidate } from './loadListasData'
+import type { ListasData, ListaCandidate, ListaKey } from './loadListasData'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -13,69 +14,92 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 type ListasDashboardProps = {
   data: ListasData
   isComissao: boolean
+  selectedListKey?: ListaKey
 }
-
-type ListaKey = 'ordem' | 'ac' | 'pcd' | 'ppp' | 'ind'
 
 type ListaConfig = {
   title: string
   description: string
-  accent: string
+  accent?: string
   badge: string
-  icon: LucideIcon
+  layoutClass: string
 }
 
-const listaKeys: ListaKey[] = ['ordem', 'ac', 'pcd', 'ppp', 'ind']
+const gridOrder: ListaKey[] = ['ordem', 'ac', 'ppp', 'pcd', 'ind']
 
 const listaConfig: Record<ListaKey, ListaConfig> = {
   ordem: {
-    title: 'Fila geral',
-    description: 'Ordenação base usada pela comissão para convocações.',
-    accent: 'from-rose-600 via-orange-500 to-amber-400',
+    title: 'Ordem de Nomeação',
+    description: 'Ordem de Nomeação usada pelo Tribunal',
+    accent: 'from-red-800 via-red-600 to-red-500',
     badge: 'Geral',
-    icon: Target,
+    layoutClass: 'col-span-full md:col-span-2 md:row-span-2 md:min-h-[460px]',
   },
   ac: {
     title: 'Ampla concorrência',
-    description: 'Acompanhamento da lista principal (AC).',
+    description: 'Lista de aprovados de Ampla Concorrência',
     accent: 'from-slate-900 via-slate-800 to-zinc-700',
     badge: 'AC',
-    icon: Users,
+    layoutClass: 'col-span-full sm:col-span-1 md:col-span-2 md:row-span-1 md:min-h-[220px]',
   },
   pcd: {
-    title: 'Pessoa com deficiência',
-    description: 'Vagas reservadas para PCD.',
-    accent: 'from-emerald-600 via-green-500 to-lime-400',
+    title: 'Pessoas com Deficiência',
+    description: 'Lista de aprovados de Pessoas com Deficiência',
+    accent: 'from-slate-900 via-slate-800 to-zinc-700',
     badge: 'PCD',
-    icon: ShieldCheck,
+    layoutClass: 'col-span-full sm:col-span-1 md:col-span-2 md:row-span-1 md:min-h-[220px]',
   },
   ppp: {
-    title: 'PPP',
-    description: 'Reserva para pretos e pardos.',
-    accent: 'from-indigo-600 via-violet-500 to-fuchsia-500',
+    title: 'Pessoas Pretas e Pardas',
+    description: 'Lista de aprovados de Pessoas Pretas e Pardas',
+    accent: 'from-slate-900 via-slate-800 to-zinc-700',
     badge: 'PPP',
-    icon: Sparkles,
+    layoutClass: 'col-span-full sm:col-span-1 md:col-span-2 md:row-span-1 md:min-h-[220px]',
   },
   ind: {
-    title: 'Indígena',
-    description: 'Lista específica para candidatos indígenas.',
-    accent: 'from-amber-700 via-orange-600 to-rose-500',
+    title: 'Indígenas',
+    description: 'Lista de aprovados de Indígenas',
+    accent: 'from-slate-900 via-slate-800 to-zinc-700',
     badge: 'IND',
-    icon: Shield,
+    layoutClass: 'col-span-full sm:col-span-1 md:col-span-2 md:row-span-1 md:min-h-[220px]',
   },
 }
 
 const numberFormatter = new Intl.NumberFormat('pt-BR')
 
-export function ListasDashboard({ data, isComissao }: ListasDashboardProps) {
+export function ListasDashboard({ data, isComissao, selectedListKey }: ListasDashboardProps) {
   const router = useRouter()
-  const [activeList, setActiveList] = useState<ListaKey>('ordem')
   const [selectedCandidate, setSelectedCandidate] = useState<ListaCandidate | null>(null)
-
-  const activeItems = data[activeList]
-  const { title, description } = listaConfig[activeList]
+  const isDetailPage = Boolean(selectedListKey)
+  const totalsByKey: Record<ListaKey, { total: number; nomeados: number }> = {
+    ordem: {
+      total: data.total_aprovados,
+      nomeados: data.total_nomeados,
+    },
+    ac: {
+      total: data.total_aprovados_ampla,
+      nomeados: data.total_nomeados_ampla,
+    },
+    pcd: {
+      total: data.total_aprovados_pcd,
+      nomeados: data.total_nomeados_pcd,
+    },
+    ppp: {
+      total: data.total_aprovados_ppp,
+      nomeados: data.total_nomeados_ppp,
+    },
+    ind: {
+      total: data.total_aprovados_indigena,
+      nomeados: data.total_nomeados_indigena,
+    },
+  }
 
   const handleBackClick = () => {
+    if (isDetailPage) {
+      router.push('/listas')
+      return
+    }
+
     if (typeof window !== 'undefined' && window.history.length > 1) {
       router.back()
     } else {
@@ -83,58 +107,76 @@ export function ListasDashboard({ data, isComissao }: ListasDashboardProps) {
     }
   }
 
+  const renderListaCards = (activeKey?: ListaKey) => (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-6 md:grid-rows-2 md:auto-rows-[220px]">
+      {gridOrder.map(key => {
+        const config = listaConfig[key]
+        const candidatos = data[key]
+        const nomeadosFallback = candidatos.filter(candidate => candidate.status_nomeacao === 'NOMEADO').length
+        const totals = totalsByKey[key]
+        const value = totals?.total ?? candidatos.length
+        const nomeados = totals?.nomeados ?? nomeadosFallback
+        const pendentes = candidatos.filter(c => c.status_nomeacao !== 'NOMEADO' && !c.td_status).length
+
+        return (
+          <ListaResumoCard
+            key={key}
+            title={config.title}
+            description={config.description}
+            badge={config.badge}
+            accent={config.accent}
+            value={value}
+            nomeados={nomeados}
+            pendentes={pendentes}
+            active={activeKey === key}
+            href={`/listas?lista=${key}`}
+            className={config.layoutClass}
+          />
+        )
+      })}
+    </div>
+  )
+
+  if (!isDetailPage || !selectedListKey) {
+    return (
+      <section className="space-y-8 pb-12">
+        <div className="space-y-2">
+          <h1 className="text-3xl font-semibold text-slate-900">Acompanhamento dos aprovados</h1>
+        </div>
+
+        {renderListaCards()}
+      </section>
+    )
+  }
+
+  const activeItems = data[selectedListKey]
+  const { title, description } = listaConfig[selectedListKey]
+
   return (
     <section className="space-y-8 pb-12">
-      <div className="flex flex-col gap-4">
-        <button
-          type="button"
-          onClick={handleBackClick}
-          className="inline-flex w-fit items-center gap-2 rounded-full border border-slate-200/80 bg-white/80 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:-translate-x-0.5 hover:border-slate-300 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/70"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Voltar
-        </button>
+      <button
+        type="button"
+        onClick={handleBackClick}
+        className="inline-flex w-fit items-center gap-2 rounded-full border border-slate-200/80 bg-white/80 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:-translate-x-0.5 hover:border-slate-300 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/70"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Voltar para listas
+      </button>
 
-        <div className="space-y-2">
-          <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Painel das listas</p>
-          <h1 className="text-3xl font-semibold text-slate-900">Acompanhamento dos aprovados</h1>
-          <p className="text-base text-slate-500">
-            Escolha uma lista no grid de cartões para visualizar os dados detalhados e clique em um nome para abrir o perfil.
-          </p>
-        </div>
+      <div className="space-y-2">
+        <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Lista selecionada</p>
+        <h1 className="text-3xl font-semibold text-slate-900">{title}</h1>
+        <p className="text-base text-slate-500">{description}</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {listaKeys.map(key => {
-          const config = listaConfig[key]
-          const candidatos = data[key]
-          const nomeados = candidatos.filter(candidate => candidate.status_nomeacao === 'NOMEADO').length
-          const pendentes = candidatos.length - nomeados
-
-          return (
-            <ListaResumoCard
-              key={key}
-              title={config.title}
-              description={config.description}
-              badge={config.badge}
-              accent={config.accent}
-              icon={config.icon}
-              value={candidatos.length}
-              nomeados={nomeados}
-              pendentes={pendentes}
-              active={activeList === key}
-              onClick={() => setActiveList(key)}
-            />
-          )
-        })}
-      </div>
+      {renderListaCards(selectedListKey)}
 
       <Card className="border-none bg-white/90 shadow-xl shadow-zinc-200/60">
         <CardContent className="p-0">
           <div className="border-b border-zinc-100 px-6 py-6">
-            <p className="text-xs uppercase tracking-[0.4em] text-zinc-400">Lista selecionada</p>
-            <div className="mt-2 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
+                <p className="text-xs uppercase tracking-[0.4em] text-zinc-400">Acompanhamento em tempo real</p>
                 <h2 className="text-2xl font-semibold text-zinc-900">{title}</h2>
                 <p className="text-sm text-zinc-500">{description}</p>
               </div>
@@ -151,7 +193,7 @@ export function ListasDashboard({ data, isComissao }: ListasDashboardProps) {
           </div>
 
           <div className="px-6 py-5">
-            <CandidateTable items={activeItems} showOrdem={activeList === 'ordem'} onSelect={setSelectedCandidate} />
+            <CandidateTable items={activeItems} showOrdem={selectedListKey === 'ordem'} onSelect={setSelectedCandidate} />
           </div>
         </CardContent>
       </Card>
@@ -175,47 +217,86 @@ type ListaResumoCardProps = {
   value: number
   nomeados: number
   pendentes: number
-  accent: string
+  accent?: string
   badge: string
-  icon: LucideIcon
-  active: boolean
-  onClick: () => void
+  active?: boolean
+  href: string
+  className?: string
 }
 
-function ListaResumoCard({ title, description, value, nomeados, pendentes, accent, badge, icon: Icon, active, onClick }: ListaResumoCardProps) {
+function ListaResumoCard({ title, description, value, nomeados, pendentes, accent, badge, active, href, className }: ListaResumoCardProps) {
+  const isOrdemCard = title === 'Ordem de Nomeação'
+  const titleClasses = isOrdemCard
+    ? 'text-3xl font-bold uppercase tracking-[0.25em] text-zinc-900'
+    : 'text-sm uppercase tracking-[0.2em] text-red-400'
+  const valueClasses = isOrdemCard ? 'text-7xl font-semibold text-zinc-900' : 'text-4xl font-semibold text-red-600'
+  const descriptionClasses = isOrdemCard ? 'text-base text-zinc-900' : 'text-sm text-red-400'
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <Link
+      href={href}
+      aria-current={active ? 'page' : undefined}
       className={cn(
-        'relative flex min-h-[220px] w-full flex-col overflow-hidden rounded-3xl border border-transparent p-6 text-left text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/70',
+        'relative flex w-full flex-col overflow-hidden rounded-3xl border border-transparent p-6 text-left text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/70',
         active
           ? 'shadow-2xl shadow-red-500/20 ring-2 ring-offset-2 ring-offset-white'
           : 'hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/10',
+        'min-h-[220px] h-full',
+        className,
       )}
     >
-      <div className={cn('absolute inset-0 bg-gradient-to-br', accent, active ? 'opacity-100' : 'opacity-90')} />
+      <div
+        className={cn(
+          'absolute inset-0 bg-gradient-to-br',
+          accent ?? 'from-slate-900 via-slate-800 to-zinc-700',
+          active ? 'opacity-100' : 'opacity-90',
+        )}
+      />
       <div className="absolute inset-0 bg-black/10" />
-      <div className="relative flex h-full flex-col justify-between gap-6">
-        <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.3em] text-white/80">
+      <div
+        className={cn(
+          'relative flex h-full flex-col gap-6',
+          isOrdemCard ? 'justify-between text-center items-center' : 'items-center justify-between text-center',
+        )}
+      >
+        <div className={cn('flex text-xs font-semibold uppercase tracking-[0.3em] text-white/80', isOrdemCard ? 'justify-start' : 'justify-center')}>
           <span className="rounded-full border border-white/40 px-3 py-1 text-[11px] font-semibold tracking-[0.3em] text-white">
             {badge}
           </span>
-          <Icon className="h-5 w-5 text-white/80" />
         </div>
 
-        <div className="space-y-2">
-          <p className="text-sm uppercase tracking-[0.2em] text-white/70">{title}</p>
-          <p className="text-3xl font-semibold">{numberFormatter.format(value)}</p>
-          <p className="text-sm text-white/80">{description}</p>
+        <div className={cn('flex w-full flex-1 flex-col', isOrdemCard ? 'items-center text-center gap-6' : 'items-center text-center') }>
+          {isOrdemCard ? (
+            <p className={titleClasses}>
+              <span className="block">Ordem de</span>
+              <span className="block">Nomeação</span>
+            </p>
+          ) : (
+            <p className={cn(titleClasses, 'mt-1')}>{title}</p>
+          )}
+
+          {isOrdemCard ? (
+            <div className="flex flex-1 items-center justify-center py-6">
+              <p className={cn(valueClasses, 'leading-none')}>{numberFormatter.format(value)}</p>
+            </div>
+          ) : (
+            <p className={cn(valueClasses, 'mt-4 mb-3 leading-none')}>{numberFormatter.format(value)}</p>
+          )}
+
+          <p className={cn(descriptionClasses, isOrdemCard ? 'mt-6' : 'mt-5')}>{description}</p>
         </div>
 
-        <div className="flex items-center justify-between text-xs font-semibold uppercase text-white/80">
-          <span>{numberFormatter.format(nomeados)} nomeados</span>
-          <span>{numberFormatter.format(pendentes)} aguardando</span>
+        <div
+          className={cn(
+            'flex w-full text-xs font-semibold uppercase',
+            isOrdemCard ? 'justify-between text-white pt-4' : 'justify-between text-white/90',
+          )}
+        >
+          <span className={cn(!isOrdemCard && 'text-left text-white')}>{numberFormatter.format(nomeados)} nomeados</span>
+          <span className={cn(!isOrdemCard && 'text-right text-white')}>{numberFormatter.format(pendentes)} aguardando</span>
         </div>
       </div>
-    </button>
+    </Link>
   )
 }
 
@@ -380,151 +461,4 @@ const sistemaLabel: Record<'AC' | 'PCD' | 'PPP' | 'IND', string> = {
   PCD: 'Pessoa com deficiência',
   PPP: 'PPP',
   IND: 'Indígena',
-}
-
-type TableProps = {
-  items: ListaCandidate[]
-  showOrdem: boolean
-  onSelect: (c: ListaCandidate) => void
-}
-
-function CandidateTable({ items, showOrdem, onSelect }: TableProps) {
-  if (!items.length) {
-    return <p className="text-sm text-slate-500 py-4">Nenhum candidato cadastrado ainda nesta lista.</p>
-  }
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-slate-200 text-xs text-slate-500 uppercase">
-            {showOrdem && <th className="py-2 pr-3 text-left">Ordem de nomeação</th>}
-            <th className="py-2 pr-3 text-left">Posição</th>
-            <th className="py-2 pr-3 text-left">Nome</th>
-            <th className="py-2 pr-3 text-left">Sistema</th>
-            <th className="py-2 pr-3 text-left">Classificação</th>
-            <th className="py-2 pr-3 text-left">Nomeado?</th>
-            <th className="py-2 pr-3 text-left">TD?</th>
-            <th className="py-2 pr-3 text-left">Outras aprovações</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((c, index) => {
-            const nomeado = c.status_nomeacao === 'NOMEADO'
-            const td = c.td_status
-
-            return (
-              <tr
-                key={c.id}
-                onClick={() => onSelect(c)}
-                className={cn(
-                  'border-b border-slate-100 cursor-pointer transition hover:bg-slate-50',
-                  nomeado && 'bg-emerald-50',
-                  td === 'SIM' && 'bg-red-50',
-                  td === 'TALVEZ' && 'bg-amber-50',
-                )}
-              >
-                {showOrdem && <td className="py-2 pr-3 text-left text-slate-700">{c.ordem_nomeacao_base ?? '—'}</td>}
-                <td className="py-2 pr-3 text-left text-slate-700">{index + 1}</td>
-                <td className="py-2 pr-3 text-left text-slate-900">{c.nome}</td>
-                <td className="py-2 pr-3 text-left text-slate-700">{sistemaLabel[c.sistema_concorrencia]}</td>
-                <td className="py-2 pr-3 text-left text-slate-700">{c.classificacao_lista ?? '—'}</td>
-                <td className="py-2 pr-3 text-left text-slate-700">{nomeado ? 'Sim' : 'Não'}</td>
-                <td className="py-2 pr-3 text-left text-slate-700">{renderTdLabel(c.td_status)}</td>
-                <td className="py-2 pr-3 text-left text-slate-700">{c.outras_aprovacoes_resumo || '—'}</td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-type DrawerProps = {
-  candidate: ListaCandidate | null
-  isComissao: boolean
-  onOpenChange: (open: boolean) => void
-}
-
-function CandidateDrawer({ candidate, isComissao, onOpenChange }: DrawerProps) {
-  const open = !!candidate
-
-  if (!candidate) return null
-
-  const nomeado = candidate.status_nomeacao === 'NOMEADO'
-
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-lg bg-white text-slate-900">
-        <SheetHeader>
-          <SheetTitle>{candidate.nome}</SheetTitle>
-          <SheetDescription className="text-slate-500">Detalhes do aprovado na lista do concurso.</SheetDescription>
-        </SheetHeader>
-
-        <div className="mt-4 space-y-4 text-sm">
-          <section className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-600">Dados gerais</p>
-            <p>
-              <span className="font-medium">Sistema:</span> {sistemaLabel[candidate.sistema_concorrencia]}
-            </p>
-            <p>
-              <span className="font-medium">Classificação na lista:</span> {candidate.classificacao_lista ?? '—'}
-            </p>
-            <p>
-              <span className="font-medium">Ordem base de nomeação:</span> {candidate.ordem_nomeacao_base ?? '—'}
-            </p>
-          </section>
-
-          <section className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-600">Nomeação & TD</p>
-            <p>
-              <span className="font-medium">Nomeado?</span> {nomeado ? 'Sim' : 'Ainda não'}
-            </p>
-            <p>
-              <span className="font-medium">TD:</span> {renderTdLabel(candidate.td_status)}
-            </p>
-            {candidate.td_observacao && (
-              <p className="text-slate-700">
-                <span className="font-medium">Obs. TD: </span>
-                {candidate.td_observacao}
-              </p>
-            )}
-          </section>
-
-          <section className="space-y-1">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-600">Outras aprovações</p>
-            <p>{candidate.outras_aprovacoes_resumo || 'Nenhum outro concurso cadastrado.'}</p>
-          </section>
-
-          {isComissao && (
-            <section className="space-y-1">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-600">
-                Contato (visível só para a comissão)
-              </p>
-              <p>
-                <span className="font-medium">E-mail:</span> {candidate.email || '—'}
-              </p>
-              <p>
-                <span className="font-medium">Telefone:</span> {candidate.telefone || '—'}
-              </p>
-              <p>
-                <span className="font-medium">Redes sociais:</span> {candidate.redes_sociais || '—'}
-              </p>
-            </section>
-          )}
-        </div>
-      </SheetContent>
-    </Sheet>
-  )
-}
-
-function renderTdLabel(status: ListaCandidate['td_status']) {
-  if (status === 'SIM') return 'Sim'
-  if (status === 'TALVEZ') return 'Talvez'
-  return '—'
-}
-
-function isSistemaValue(value: string): value is 'AC' | 'PCD' | 'PPP' | 'IND' {
-  return value === 'AC' || value === 'PCD' || value === 'PPP' || value === 'IND'
 }

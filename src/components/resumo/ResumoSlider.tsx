@@ -1,5 +1,6 @@
 "use client"
 
+import { ChevronLeft, ChevronRight } from "lucide-react"
 import { useEffect, useState } from "react"
 
 type Totais = {
@@ -81,62 +82,94 @@ export default function ResumoSlider({ data }: Props) {
     },
   ]
 
+  const totalSlides = slides.length
+
   useEffect(() => {
     const timer = setInterval(() => {
-      setIndex(prev => (prev + 1) % slides.length)
+      setIndex(prev => (prev + 1) % totalSlides)
     }, SLIDE_INTERVAL_MS)
 
     return () => clearInterval(timer)
-  }, [slides.length])
+  }, [totalSlides])
 
   const active = slides[index]
+  const progress = ((index + 1) / totalSlides) * 100
+
+  const handlePrev = () => {
+    setIndex(prev => (prev - 1 + totalSlides) % totalSlides)
+  }
+
+  const handleNext = () => {
+    setIndex(prev => (prev + 1) % totalSlides)
+  }
 
   return (
-    <div className="w-full h-full flex flex-col">
-      {/* CARD DO SLIDE */}
-      <div className="flex-1 rounded-[28px] bg-white/90 ring-1 ring-black/5 shadow-md shadow-black/10 px-8 py-6">
-        {/* Grid de 4 faixas: topo, valor, descrição, dots */}
-        <div className="grid h-full grid-rows-[auto,1fr,auto,auto] gap-2">
-          {/* TOPO – título vermelho */}
-          <div className="flex justify-center">
-            <p className="text-center text-xs font-semibold tracking-[0.18em] uppercase text-[#C62828]">
-              {active.titulo}
-            </p>
-          </div>
+    <div className="relative flex h-full w-full flex-col overflow-hidden rounded-[28px] bg-gradient-to-br from-[#040510] via-[#0B0F1F] to-[#1C2742] text-white shadow-[0_30px_80px_rgba(5,8,20,0.75)]">
+      <div className="pointer-events-none absolute -left-12 top-10 h-40 w-40 rounded-full bg-[#C62828]/30 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-16 right-0 h-48 w-48 rounded-full bg-[#FFAB91]/20 blur-3xl" />
 
-          {/* CENTRO – valor gigante, centralizado */}
-          <div className="flex items-center justify-center">
-            <p className="text-2xl md:text-3xl lg:text-4xl font-semibold text-slate-900 text-center leading-tight">
-              {active.destaque}
-            </p>
-          </div>
+      <div className="relative flex h-full flex-col px-7 py-6">
+        <header className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.35em] text-white/60">
+          <span>Resumo</span>
+          <span className="font-mono tracking-[0.2em]">
+            {String(index + 1).padStart(2, '0')}/{String(totalSlides).padStart(2, '0')}
+          </span>
+        </header>
 
-          {/* BASE – descrição encostada embaixo */}
-          <div className="flex items-end justify-center">
-            {active.descricao && (
-              <p className="text-center text-sm text-slate-600 leading-relaxed">{active.descricao}</p>
-            )}
-          </div>
-
-          {/* DOTS dentro do card */}
-          <div className="flex items-end justify-center gap-2 pt-2">
-            {slides.map((s, i) => {
-              const isActive = i === index
-              return (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setIndex(i)}
-                  className={[
-                    'h-2 rounded-full transition-all duration-200',
-                    isActive ? 'w-6 bg-slate-700' : 'w-2 bg-slate-300 hover:bg-slate-400',
-                  ].join(' ')}
-                  aria-label={s.titulo}
-                />
-              )
-            })}
-          </div>
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+          <p className="text-[12px] uppercase tracking-[0.3em] text-[#FFAB91]">{active.titulo}</p>
+          <p className="text-3xl font-semibold leading-tight text-white drop-shadow-sm md:text-4xl">
+            {active.destaque}
+          </p>
+          {active.descricao && (
+            <p className="max-w-sm text-sm text-white/70 md:text-base">{active.descricao}</p>
+          )}
         </div>
+
+        <footer className="flex flex-col gap-4">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/15">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-[#FF8A65] via-[#FF7043] to-[#C62828] transition-all duration-500"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+
+          <div className="flex items-center justify-between text-xs uppercase tracking-[0.3em]">
+            <button
+              type="button"
+              onClick={handlePrev}
+              className="flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-white/80 transition hover:border-white/40 hover:text-white"
+            >
+              <ChevronLeft className="h-4 w-4" /> Prev
+            </button>
+
+            <div className="flex items-center gap-1">
+              {slides.map((s, i) => {
+                const isActive = i === index
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setIndex(i)}
+                    className={[
+                      'h-1 rounded-full transition-all duration-200',
+                      isActive ? 'w-6 bg-white' : 'w-2 bg-white/30 hover:bg-white/60',
+                    ].join(' ')}
+                    aria-label={s.titulo}
+                  />
+                )
+              })}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleNext}
+              className="flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-white/80 transition hover:border-white/40 hover:text-white"
+            >
+              Next <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </footer>
       </div>
     </div>
   )
