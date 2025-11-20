@@ -26,7 +26,7 @@ type Props = {
   data: ResumoSliderData
 }
 
-const SLIDE_INTERVAL_MS = 5000
+const SLIDE_INTERVAL_MS = 10000
 
 export default function ResumoSlider({ data }: Props) {
   const [index, setIndex] = useState(0)
@@ -104,9 +104,9 @@ export default function ResumoSlider({ data }: Props) {
   }
 
   return (
-    <div className="relative flex h-full w-full flex-col overflow-hidden rounded-[28px] bg-gradient-to-br from-[#040510] via-[#0B0F1F] to-[#1C2742] text-white shadow-[0_30px_80px_rgba(5,8,20,0.75)]">
-      <div className="pointer-events-none absolute -left-12 top-10 h-40 w-40 rounded-full bg-[#C62828]/30 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-16 right-0 h-48 w-48 rounded-full bg-[#FFAB91]/20 blur-3xl" />
+    <div className="relative flex h-full w-full flex-col overflow-hidden rounded-[28px] bg-gradient-to-br from-[#040510] via-[#0B0F1F] to-[#1C2742] text-white shadow-[0_18px_46px_rgba(5,8,20,0.45)]">
+      <div className="pointer-events-none absolute -left-6 top-12 h-28 w-28 rounded-full bg-[#C62828]/25 blur-[110px]" />
+      <div className="pointer-events-none absolute -bottom-12 right-4 h-32 w-32 rounded-full bg-[#FFAB91]/18 blur-[110px]" />
 
       <div className="relative flex h-full flex-col px-7 py-6">
         <header className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.35em] text-white/60">
@@ -140,33 +140,15 @@ export default function ResumoSlider({ data }: Props) {
               onClick={handlePrev}
               className="flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-white/80 transition hover:border-white/40 hover:text-white"
             >
-              <ChevronLeft className="h-4 w-4" /> Prev
+              <ChevronLeft className="h-4 w-4" /> Anterior
             </button>
-
-            <div className="flex items-center gap-1">
-              {slides.map((s, i) => {
-                const isActive = i === index
-                return (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => setIndex(i)}
-                    className={[
-                      'h-1 rounded-full transition-all duration-200',
-                      isActive ? 'w-6 bg-white' : 'w-2 bg-white/30 hover:bg-white/60',
-                    ].join(' ')}
-                    aria-label={s.titulo}
-                  />
-                )
-              })}
-            </div>
 
             <button
               type="button"
               onClick={handleNext}
               className="flex items-center gap-2 rounded-full border border-white/20 px-4 py-2 text-white/80 transition hover:border-white/40 hover:text-white"
             >
-              Next <ChevronRight className="h-4 w-4" />
+              Próximo <ChevronRight className="h-4 w-4" />
             </button>
           </div>
         </footer>

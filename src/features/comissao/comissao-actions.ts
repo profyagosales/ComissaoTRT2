@@ -1,0 +1,518 @@
+"use server"
+
+import { revalidatePath } from "next/cache"
+
+import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { mapTipoTdToCandidateStatus } from "@/features/tds/td-types"
+import type { TdRequestTipo } from "@/features/tds/td-types"
+
+type Decision = "APROVAR" | "REJEITAR"
+
+type SupabaseUser = {
+  id: string
+}
+
+type NotificationPayload = {
+  titulo: string
+  corpo: string
+  tipo?: string
+  visivelPara?: string
+  metadata?: Record<string, unknown>
+}
+
+type CsjtDestinoInput = {
+  tribunal: string
+  cargo?: string
+  quantidade: number
+}
+
+async function assertComissaoUser(): Promise<SupabaseUser> {
+  const supabase = await createSupabaseServerClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    throw new Error("Você precisa estar autenticado para aprovar registros.")
+  }
+
+  const { data: profile } = await supabase
+    .from("user_profiles")
+    .select("role")
+    .eq("user_id", user.id)
+    .maybeSingle()
+
+  if (profile?.role !== "COMISSAO") {
+    throw new Error("Acesso permitido apenas para membros da comissão.")
+  }
+
+  return { id: user.id }
+}
+
+async function enqueueResumoNotification(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  payload: NotificationPayload
+) {
+  try {
+    const { error } = await supabase.from("notifications_queue").insert({
+      titulo: payload.titulo,
+      corpo: payload.corpo,
+      tipo: payload.tipo ?? "RESUMO",
+      visivel_para: payload.visivelPara ?? "APROVADOS",
+      metadata: payload.metadata ?? null,
+      status: "PENDENTE",
+    })
+
+    if (error) {
+      console.error("[enqueueResumoNotification] erro ao enfileirar", error)
+    }
+  } catch (error) {
+    console.error("[enqueueResumoNotification] falha inesperada", error)
+  }
+}
+
+function formatPtBr(date: string) {
+  try {
+    return new Intl.DateTimeFormat("pt-BR").format(new Date(date))
+  } catch {
+    return date
+  }
+}
+
+export async function moderateOutraAprovacaoAction(params: { approvalId: string; decision: Decision }) {
+  const supabase = await createSupabaseServerClient()
+  const user = await assertComissaoUser()
+
+  const status = params.decision === "APROVAR" ? "APROVADO" : "RECUSADO"
+  const now = new Date().toISOString()
+
+  const { error } = await supabase
+    .from("outras_aprovacoes")
+    .update({
+      status,
+      approved_at: now,
+      approved_by: user.id,
+      updated_at: now,
+    })
+    .eq("id", params.approvalId)
+
+  if (error) {
+    console.error("[moderateOutraAprovacaoAction] erro ao atualizar aprovação", error)
+    throw new Error("Não foi possível atualizar essa aprovação agora.")
+  }
+
+  revalidatePath("/comissao")
+  revalidatePath("/listas")
+}
+
+export async function moderateTdRequestAction(params: { requestId: string; decision: Decision }) {
+  const supabase = await createSupabaseServerClient()
+  const user = await assertComissaoUser()
+
+  const { data: request, error: fetchError } = await supabase
+    .from("td_requests")
+    .select("id, candidate_id, tipo_td, observacao")
+    .eq("id", params.requestId)
+    .maybeSingle<{ id: string; candidate_id: string; tipo_td: TdRequestTipo; observacao: string | null }>()
+
+  if (fetchError || !request) {
+    console.error("[moderateTdRequestAction] erro ao buscar td_request", fetchError)
+    throw new Error("Não foi possível localizar essa solicitação de TD.")
+  }
+
+  if (!request.tipo_td) {
+    console.error("[moderateTdRequestAction] solicitação sem tipo_td definido", request)
+    throw new Error("Registro de TD inválido: tipo não informado.")
+  }
+
+  const status = params.decision === "APROVAR" ? "APROVADO" : "REJEITADO"
+  const now = new Date().toISOString()
+
+  const { error } = await supabase
+    .from("td_requests")
+    .update({
+      status,
+      approved_at: now,
+      approved_by: user.id,
+      updated_at: now,
+    })
+    .eq("id", params.requestId)
+
+  if (error) {
+    console.error("[moderateTdRequestAction] erro ao atualizar td_request", error)
+    throw new Error("Não foi possível atualizar essa solicitação agora.")
+  }
+
+  if (params.decision === "APROVAR") {
+    const tdStatus = mapTipoTdToCandidateStatus(request.tipo_td)
+    const defaultObs = `TD ${request.tipo_td === "ENVIADO" ? "confirmado" : "em preparação"} (${new Intl.DateTimeFormat("pt-BR").format(new Date())})`
+    const { error: candidateError } = await supabase
+      .from("candidates")
+      .update({
+        td_status: tdStatus,
+        td_observacao: request.observacao ?? defaultObs,
+      })
+      .eq("id", request.candidate_id)
+
+    if (candidateError) {
+      console.error("[moderateTdRequestAction] erro ao atualizar candidato", candidateError)
+    }
+  }
+
+  revalidatePath("/comissao")
+  revalidatePath("/listas")
+  revalidatePath("/resumo")
+  revalidatePath("/tds")
+}
+
+export async function upsertLoaAction(input: {
+  id?: string
+  ano: number
+  totalPrevisto: number
+  status: string
+  descricao?: string | null
+  shouldNotify?: boolean
+}) {
+  const supabase = await createSupabaseServerClient()
+  await assertComissaoUser()
+
+  const ano = Number(input.ano)
+  if (!Number.isFinite(ano) || ano < 2000) {
+    throw new Error("Informe um ano válido para a LOA.")
+  }
+
+  const totalPrevisto = Number(input.totalPrevisto)
+  if (!Number.isFinite(totalPrevisto) || totalPrevisto <= 0) {
+    throw new Error("Total previsto precisa ser maior que zero.")
+  }
+
+  const status = input.status?.trim()
+  if (!status) {
+    throw new Error("Informe o status da LOA.")
+  }
+
+  const descricao = input.descricao?.trim() || null
+  const now = new Date().toISOString()
+  const payload = {
+    ano,
+    total_previsto: totalPrevisto,
+    status,
+    descricao,
+    updated_at: now,
+  }
+
+  let targetId = input.id ?? null
+
+  if (targetId) {
+    const { error } = await supabase.from("loas").update(payload).eq("id", targetId)
+    if (error) {
+      console.error("[upsertLoaAction] erro ao atualizar", error)
+      throw new Error("Não foi possível atualizar a LOA informada.")
+    }
+  } else {
+    const { data, error } = await supabase
+      .from("loas")
+      .insert({ ...payload, created_at: now })
+      .select("id")
+      .single<{ id: string }>()
+
+    if (error || !data) {
+      console.error("[upsertLoaAction] erro ao criar", error)
+      throw new Error("Não foi possível criar a nova LOA.")
+    }
+
+    targetId = data.id
+  }
+
+  if (input.shouldNotify && targetId) {
+    await enqueueResumoNotification(supabase, {
+      titulo: `LOA ${ano} atualizada`,
+      corpo: `Status ${status} com ${totalPrevisto} provimentos previstos.`,
+      tipo: "LOA",
+      metadata: { loaId: targetId },
+    })
+  }
+
+  revalidatePath("/comissao")
+  revalidatePath("/resumo")
+}
+
+export async function upsertCsjtAuthorizationAction(input: {
+  id?: string
+  dataAutorizacao: string
+  totalProvimentos: number
+  observacao?: string | null
+  loaId?: string | null
+  destinos: CsjtDestinoInput[]
+  shouldNotify?: boolean
+}) {
+  const supabase = await createSupabaseServerClient()
+  await assertComissaoUser()
+
+  const totalProvimentos = Number(input.totalProvimentos)
+  if (!Number.isFinite(totalProvimentos) || totalProvimentos <= 0) {
+    throw new Error("Informe o total de provimentos autorizados.")
+  }
+
+  const dataAutorizacao = new Date(input.dataAutorizacao)
+  if (Number.isNaN(dataAutorizacao.getTime())) {
+    throw new Error("Informe uma data de autorização válida.")
+  }
+
+  const destinosValidos = (input.destinos ?? [])
+    .map((dest) => ({
+      tribunal: dest.tribunal?.trim() ?? "",
+      cargo: dest.cargo?.trim() || "—",
+      quantidade: Number(dest.quantidade) || 0,
+    }))
+    .filter((dest) => dest.tribunal && dest.quantidade > 0)
+
+  if (!destinosValidos.length) {
+    throw new Error("Cadastre ao menos um destino para a autorização do CSJT.")
+  }
+
+  const somaDestinos = destinosValidos.reduce((acc, dest) => acc + dest.quantidade, 0)
+  if (somaDestinos !== totalProvimentos) {
+    throw new Error("A soma dos destinos precisa ser igual ao total de provimentos.")
+  }
+
+  const now = new Date().toISOString()
+  const payload = {
+    data_autorizacao: dataAutorizacao.toISOString(),
+    total_provimentos: totalProvimentos,
+    observacao: input.observacao?.trim() || null,
+    loa_id: input.loaId || null,
+    updated_at: now,
+  }
+
+  let authorizationId = input.id ?? null
+
+  if (authorizationId) {
+    const { error } = await supabase.from("csjt_autorizacoes").update(payload).eq("id", authorizationId)
+    if (error) {
+      console.error("[upsertCsjtAuthorizationAction] erro ao atualizar", error)
+      throw new Error("Não foi possível atualizar essa autorização.")
+    }
+
+    const { error: deleteError } = await supabase
+      .from("csjt_autorizacoes_destinos")
+      .delete()
+      .eq("csjt_autorizacao_id", authorizationId)
+
+    if (deleteError) {
+      console.error("[upsertCsjtAuthorizationAction] erro ao limpar destinos", deleteError)
+      throw new Error("Não foi possível atualizar os destinos dessa autorização.")
+    }
+  } else {
+    const { data, error } = await supabase
+      .from("csjt_autorizacoes")
+      .insert({ ...payload, created_at: now })
+      .select("id")
+      .single<{ id: string }>()
+
+    if (error || !data) {
+      console.error("[upsertCsjtAuthorizationAction] erro ao criar", error)
+      throw new Error("Não foi possível criar a autorização do CSJT.")
+    }
+
+    authorizationId = data.id
+  }
+
+  if (authorizationId && destinosValidos.length) {
+    const destinosPayload = destinosValidos.map((dest) => ({
+      csjt_autorizacao_id: authorizationId,
+      tribunal: dest.tribunal,
+      cargo: dest.cargo,
+      quantidade: dest.quantidade,
+    }))
+
+    const { error: destinosError } = await supabase
+      .from("csjt_autorizacoes_destinos")
+      .insert(destinosPayload)
+
+    if (destinosError) {
+      console.error("[upsertCsjtAuthorizationAction] erro ao salvar destinos", destinosError)
+      throw new Error("Não foi possível salvar os destinos dessa autorização.")
+    }
+  }
+
+  if (input.shouldNotify && authorizationId) {
+    await enqueueResumoNotification(supabase, {
+      titulo: `CSJT autorizou ${totalProvimentos} provimentos`,
+      corpo: `Distribuição confirmada em ${formatPtBr(payload.data_autorizacao)}.`,
+      tipo: "CSJT",
+      metadata: { csjtAuthorizationId: authorizationId },
+    })
+  }
+
+  revalidatePath("/comissao")
+  revalidatePath("/resumo")
+}
+
+export async function upsertCargosVagosAction(input: {
+  id?: string
+  dataReferencia: string
+  analistaVagos: number
+  tecnicoVagos: number
+  observacao?: string | null
+  fonteUrl?: string | null
+  shouldNotify?: boolean
+}) {
+  const supabase = await createSupabaseServerClient()
+  await assertComissaoUser()
+
+  const dataReferencia = new Date(input.dataReferencia)
+  if (Number.isNaN(dataReferencia.getTime())) {
+    throw new Error("Informe uma data de referência válida.")
+  }
+
+  const analistaVagos = Number(input.analistaVagos)
+  const tecnicoVagos = Number(input.tecnicoVagos)
+
+  if (!Number.isFinite(analistaVagos) || analistaVagos < 0 || !Number.isFinite(tecnicoVagos) || tecnicoVagos < 0) {
+    throw new Error("Informe números válidos para cargos vagos.")
+  }
+
+  const now = new Date().toISOString()
+  const payload = {
+    data_referencia: dataReferencia.toISOString(),
+    analista_vagos: analistaVagos,
+    tecnico_vagos: tecnicoVagos,
+    observacao: input.observacao?.trim() || null,
+    fonte_url: input.fonteUrl?.trim() || null,
+    updated_at: now,
+  }
+
+  let targetId = input.id ?? null
+
+  if (targetId) {
+    const { error } = await supabase.from("cargos_vagos_trt2").update(payload).eq("id", targetId)
+    if (error) {
+      console.error("[upsertCargosVagosAction] erro ao atualizar", error)
+      throw new Error("Não foi possível atualizar o registro de cargos vagos.")
+    }
+  } else {
+    const { data, error } = await supabase
+      .from("cargos_vagos_trt2")
+      .insert({ ...payload, created_at: now })
+      .select("id")
+      .single<{ id: string }>()
+
+    if (error || !data) {
+      console.error("[upsertCargosVagosAction] erro ao criar", error)
+      throw new Error("Não foi possível criar o registro de cargos vagos.")
+    }
+
+    targetId = data.id
+  }
+
+  if (input.shouldNotify && targetId) {
+    await enqueueResumoNotification(supabase, {
+      titulo: "Cargos vagos atualizados",
+      corpo: `${analistaVagos} AJ / ${tecnicoVagos} TJ na data ${formatPtBr(payload.data_referencia)}.`,
+      tipo: "CARGOS_VAGOS",
+      metadata: { cargosVagosId: targetId },
+    })
+  }
+
+  revalidatePath("/comissao")
+  revalidatePath("/resumo")
+}
+
+export async function registrarNomeacaoAction(input: {
+  candidateId: string
+  dataNomeacao: string
+  numeroAto?: string | null
+  fonteUrl?: string | null
+  observacao?: string | null
+  nomeacaoId?: string | null
+  shouldNotify?: boolean
+}) {
+  if (!input.candidateId) {
+    throw new Error("Selecione o aprovado que foi nomeado.")
+  }
+
+  const supabase = await createSupabaseServerClient()
+  const user = await assertComissaoUser()
+
+  const dataNomeacao = new Date(input.dataNomeacao)
+  if (Number.isNaN(dataNomeacao.getTime())) {
+    throw new Error("Informe uma data de nomeação válida.")
+  }
+
+  const now = new Date().toISOString()
+  const nomeacaoPayload = {
+    data_nomeacao: dataNomeacao.toISOString(),
+    numero_ato: input.numeroAto?.trim() || null,
+    fonte_url: input.fonteUrl?.trim() || null,
+    observacao: input.observacao?.trim() || null,
+    tipo: "NOMEACAO",
+    updated_at: now,
+    created_by: user.id,
+  }
+
+  let nomeacaoId = input.nomeacaoId ?? null
+
+  if (nomeacaoId) {
+    const { error } = await supabase
+      .from("nomeacoes")
+      .update(nomeacaoPayload)
+      .eq("id", nomeacaoId)
+
+    if (error) {
+      console.error("[registrarNomeacaoAction] erro ao atualizar nomeação", error)
+      throw new Error("Não foi possível atualizar a nomeação informada.")
+    }
+  } else {
+    const { data, error } = await supabase
+      .from("nomeacoes")
+      .insert({ ...nomeacaoPayload, created_at: now })
+      .select("id")
+      .single<{ id: string }>()
+
+    if (error || !data) {
+      console.error("[registrarNomeacaoAction] erro ao criar nomeação", error)
+      throw new Error("Não foi possível criar o registro de nomeação.")
+    }
+
+    nomeacaoId = data.id
+  }
+
+  const { error: linkError } = await supabase.from("nomeacoes_candidatos").insert({
+    nomeacao_id: nomeacaoId,
+    candidate_id: input.candidateId,
+    status: "PUBLICADA",
+    observacao: nomeacaoPayload.observacao,
+    created_at: now,
+    updated_at: now,
+  })
+
+  if (linkError) {
+    console.error("[registrarNomeacaoAction] erro ao vincular candidato", linkError)
+    throw new Error("Não foi possível vincular o aprovado à nomeação.")
+  }
+
+  const { error: candidateError } = await supabase
+    .from("candidates")
+    .update({ status_nomeacao: "NOMEADO", updated_at: now })
+    .eq("id", input.candidateId)
+
+  if (candidateError) {
+    console.error("[registrarNomeacaoAction] erro ao atualizar candidato", candidateError)
+    throw new Error("Nomeação registrada, mas não conseguimos atualizar o candidato.")
+  }
+
+  if (input.shouldNotify && nomeacaoId) {
+    await enqueueResumoNotification(supabase, {
+      titulo: "Nova nomeação publicada",
+      corpo: "Atualizamos a lista de nomeados no TRT-2.",
+      tipo: "NOMEACAO",
+      metadata: { nomeacaoId, candidateId: input.candidateId },
+    })
+  }
+
+  revalidatePath("/comissao")
+  revalidatePath("/listas")
+  revalidatePath("/resumo")
+}

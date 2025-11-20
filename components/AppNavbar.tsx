@@ -2,10 +2,17 @@
 
 import Image from "next/image"
 import Link from "next/link"
+import { useMemo } from "react"
 import { usePathname } from "next/navigation"
 import { Instagram, LogOut, Mail } from "lucide-react"
 
-const NAV_ITEMS = [
+type NavItem = {
+  href: string
+  label: string
+  emphasis?: boolean
+}
+
+const BASE_NAV_ITEMS: NavItem[] = [
   { href: "/resumo", label: "Resumo" },
   { href: "/listas", label: "Listas" },
   { href: "/tds", label: "TDs" },
@@ -15,8 +22,13 @@ const NAV_ITEMS = [
 const EMAIL = "aprovados.tjaa.trt2.2025@gmail.com"
 const INSTAGRAM_URL = "https://www.instagram.com/aprovados_tjaa/"
 
-export function AppNavbar() {
+export function AppNavbar({ isComissao = false }: { isComissao?: boolean }) {
   const pathname = usePathname()
+
+  const navItems = useMemo(() => {
+    if (!isComissao) return BASE_NAV_ITEMS
+    return [...BASE_NAV_ITEMS, { href: "/comissao", label: "Comissão", emphasis: true }]
+  }, [isComissao])
 
   return (
     <header className="sticky top-0 z-40">
@@ -73,8 +85,9 @@ export function AppNavbar() {
 
         <div className="mt-[-42px] flex justify-center px-4 pb-2 pt-1 lg:mt-[-44px] lg:px-6 lg:pb-2.5 lg:pt-1.5">
           <nav className="flex flex-wrap items-center justify-center gap-2">
-            {NAV_ITEMS.map(item => {
+            {navItems.map(item => {
               const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
+              const isEmphasis = Boolean(item.emphasis)
 
               return (
                 <Link
@@ -83,9 +96,13 @@ export function AppNavbar() {
                   className={[
                     "inline-flex items-center rounded-full px-5 py-[0.35rem] text-sm font-medium transition-all",
                     "outline-none ring-2 ring-transparent focus-visible:ring-white/80",
-                    active
-                      ? "bg-white text-red-900 shadow-sm shadow-black/30"
-                      : "bg-white/10 text-red-50 hover:bg-white/18",
+                    isEmphasis
+                      ? active
+                        ? "bg-black text-white shadow-sm shadow-black/40"
+                        : "bg-black/90 text-white hover:bg-black"
+                      : active
+                        ? "bg-white text-red-900 shadow-sm shadow-black/30"
+                        : "bg-white/10 text-red-50 hover:bg-white/18",
                   ].join(" ")}
                 >
                   {item.label}

@@ -8,6 +8,7 @@ import {
   createTdRequest,
   updateUserProfileContact,
 } from './resumo-actions'
+import type { TdRequestTipo } from '@/features/tds/td-types'
 
 type BaseModalProps = {
   open: boolean
@@ -199,11 +200,15 @@ type EnviarTdModalProps = {
 
 export function EnviarTdModal({ trigger, candidateId }: EnviarTdModalProps) {
   const [open, setOpen] = useState(false)
-  const [tipoTd, setTipoTd] = useState<'ENVIADO' | 'QUERO_ENVIAR'>('QUERO_ENVIAR')
+  const [tipoTd, setTipoTd] = useState<TdRequestTipo>('INTERESSE')
   const [observacao, setObservacao] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  if (!candidateId) {
+    return null
+  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -213,9 +218,8 @@ export function EnviarTdModal({ trigger, candidateId }: EnviarTdModalProps) {
     startTransition(async () => {
       try {
         await createTdRequest({
-          candidateId,
           tipoTd,
-          observacao: observacao || undefined,
+          observacao: observacao.trim() || undefined,
         })
         setSuccess(
           'Solicitação registrada. A Comissão irá analisar e, se aprovado, o TD será refletido nas listas.',
@@ -251,9 +255,9 @@ export function EnviarTdModal({ trigger, candidateId }: EnviarTdModalProps) {
                 <input
                   type="radio"
                   name="tipo_td"
-                  value="QUERO_ENVIAR"
-                  checked={tipoTd === 'QUERO_ENVIAR'}
-                  onChange={() => setTipoTd('QUERO_ENVIAR')}
+                  value="INTERESSE"
+                  checked={tipoTd === 'INTERESSE'}
+                  onChange={() => setTipoTd('INTERESSE')}
                 />
                 <span>Tenho interesse em enviar TD</span>
               </label>
