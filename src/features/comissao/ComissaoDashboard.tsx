@@ -1,12 +1,14 @@
 "use client"
 
-import type { ReactNode } from "react"
+import { useMemo, type ReactNode } from "react"
 import { ClipboardList, FileSignature, ListChecks, Megaphone, Settings2 } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ResumoCardActions } from "./ResumoCardModals"
 import { ListasCardActions } from "./ListasCardModals"
+import { TdCardActions } from "./TdCardModals"
+import { VacanciasCardActions } from "./VacanciasCardModals"
+import { ControleCardActions } from "./ControleCardModals"
 import type { ComissaoDashboardData } from "./loadComissaoData"
 
 type DashboardCardProps = {
@@ -31,20 +33,6 @@ function DashboardCard({ title, description, children, icon }: DashboardCardProp
   )
 }
 
-function PlaceholderButton({ label }: { label: string }) {
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      disabled
-      className="w-full justify-center rounded-full border-dashed border-red-200 text-xs font-semibold text-red-600"
-    >
-      {label}
-    </Button>
-  )
-}
-
 function formatDate(value?: string | null) {
   if (!value) return "—"
   try {
@@ -61,17 +49,30 @@ export function ComissaoDashboard({ data }: { data: ComissaoDashboardData }) {
     latestLoa,
     latestCsjtAuthorization,
     latestCargosVagos,
-    latestVacancia,
     outrasAprovacoes,
     tdRequests,
     loasHistory,
     csjtAuthorizationsHistory,
     cargosVagosHistory,
     candidates,
+    tdContent,
+    vacanciasHistory,
+    notificationsQueue,
   } = data
 
   const outrasPreview = outrasAprovacoes.slice(0, 3)
   const tdPreview = tdRequests.slice(0, 3)
+  const vacanciasPreview = vacanciasHistory.slice(0, 3)
+  const notificationsSummary = useMemo(() => {
+    const summary = { pendentes: 0, falhas: 0, enviadas: 0 }
+    notificationsQueue.forEach((item) => {
+      if (item.status === "PENDENTE") summary.pendentes += 1
+      if (item.status === "ERRO") summary.falhas += 1
+      if (item.status === "ENVIADO") summary.enviadas += 1
+    })
+    return summary
+  }, [notificationsQueue])
+  const destaqueControle = notificationsQueue[0]
   const resumoHighlights = [
     {
       label: "LOA",
@@ -170,11 +171,7 @@ export function ComissaoDashboard({ data }: { data: ComissaoDashboardData }) {
               <p className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50 px-3 py-4 text-sm text-zinc-500">Nenhuma solicitação aguardando revisão.</p>
             )}
           </div>
-          <div className="grid gap-2">
-            <PlaceholderButton label="Revisar TDs" />
-            <PlaceholderButton label="Editar texto oficial" />
-            <PlaceholderButton label="Cadastrar TD manual" />
-          </div>
+          <TdCardActions pending={tdRequests} candidates={candidates} content={tdContent} />
         </>
       ),
     },
@@ -185,21 +182,21 @@ export function ComissaoDashboard({ data }: { data: ComissaoDashboardData }) {
       icon: <Megaphone className="h-5 w-5" />,
       content: (
         <>
-          <div className="rounded-2xl border border-zinc-100 bg-zinc-50/80 p-4 text-sm">
-            {latestVacancia ? (
-              <div className="space-y-1">
-                <p className="font-semibold text-zinc-900">{latestVacancia.cargo ?? "Cargo"}</p>
-                <p className="text-zinc-600">Motivo: {latestVacancia.motivo ?? "—"}</p>
-                <p className="text-xs text-zinc-500">{latestVacancia.tribunal ?? "TRT-2"} · {formatDate(latestVacancia.data)}</p>
-              </div>
+          <div className="space-y-2 text-sm">
+            {vacanciasPreview.length ? (
+              vacanciasPreview.map((item) => (
+                <div key={item.id} className="rounded-2xl border border-zinc-100 bg-zinc-50/80 p-3">
+                  <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">{item.tribunal ?? "TRT-2"}</p>
+                  <p className="text-base font-semibold text-zinc-900">{item.cargo ?? "Cargo"}</p>
+                  <p className="text-xs text-zinc-500">{item.motivo ?? "Sem motivo"}</p>
+                  <p className="text-[11px] text-zinc-400">{formatDate(item.data)}</p>
+                </div>
+              ))
             ) : (
-              <p className="text-zinc-500">Nenhuma vacância registrada.</p>
+              <p className="rounded-2xl border border-dashed border-zinc-200 bg-white/80 px-3 py-4 text-sm text-zinc-500">Nenhuma vacância registrada até o momento.</p>
             )}
           </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <PlaceholderButton label="Nova vacância" />
-            <PlaceholderButton label="Editar registros" />
-          </div>
+          <VacanciasCardActions vacancias={vacanciasHistory} />
         </>
       ),
     },
@@ -210,13 +207,23 @@ export function ComissaoDashboard({ data }: { data: ComissaoDashboardData }) {
       icon: <Settings2 className="h-5 w-5" />,
       content: (
         <>
-          <div className="rounded-2xl border border-dashed border-zinc-200 bg-white/80 p-4 text-sm text-zinc-600">
-            Centralize filas de notificações e os relatórios CSV/PDF para enviar atualizações à base de aprovados.
+          <div className="rounded-2xl border border-zinc-100 bg-white/80 p-4 text-sm">
+            <div className="flex flex-wrap items-center gap-3 text-xs">
+              <span className="rounded-full bg-amber-50 px-3 py-1 font-semibold text-amber-700">Pendentes: {notificationsSummary.pendentes}</span>
+              <span className="rounded-full bg-red-50 px-3 py-1 font-semibold text-red-700">Falhas: {notificationsSummary.falhas}</span>
+              <span className="rounded-full bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">Enviadas: {notificationsSummary.enviadas}</span>
+            </div>
+            {destaqueControle ? (
+              <div className="mt-3 space-y-1">
+                <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">Última mensagem</p>
+                <p className="text-base font-semibold text-zinc-900">{destaqueControle.titulo}</p>
+                <p className="text-xs text-zinc-500 line-clamp-2">{destaqueControle.corpo}</p>
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-zinc-500">Fila vazia no momento.</p>
+            )}
           </div>
-          <div className="grid gap-2">
-            <PlaceholderButton label="Fila de notificações" />
-            <PlaceholderButton label="Relatórios" />
-          </div>
+          <ControleCardActions queue={notificationsQueue} />
         </>
       ),
     },
@@ -268,7 +275,7 @@ export function ComissaoDashboard({ data }: { data: ComissaoDashboardData }) {
         <div>
           <p className="text-xs uppercase tracking-[0.35em] text-zinc-400">Fluxo operacional</p>
           <h2 className="text-2xl font-semibold text-zinc-900">Kanban da Comissão</h2>
-          <p className="text-sm text-zinc-500">Cada coluna representa um conjunto de responsabilidades. O Resumo já está conectado aos modais oficiais; os demais blocos continuam com indicadores até as próximas entregas.</p>
+          <p className="text-sm text-zinc-500">Os cinco cards agora contam com formulários e modais prontos para conduzir toda a operação da comissão.</p>
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
           {boardColumns.map((column) => (

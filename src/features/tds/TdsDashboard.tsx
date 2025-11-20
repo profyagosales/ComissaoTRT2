@@ -28,6 +28,7 @@ export function TdsDashboard({ data, isComissao }: TdsDashboardProps) {
   const [search, setSearch] = useState("")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
+  const { content } = data
 
   const filteredItems = useMemo(() => {
     const searchLower = search.trim().toLowerCase()
@@ -76,9 +77,7 @@ export function TdsDashboard({ data, isComissao }: TdsDashboardProps) {
         <CardHeader className="flex flex-col gap-3 border-b border-white/60 pb-4 md:flex-row md:items-start md:justify-between">
           <div>
             <CardTitle className="text-xl font-semibold text-slate-900">Como funciona o TD?</CardTitle>
-            <CardDescription className="text-sm text-slate-600">
-              O Termo de Desistência (TD) é o documento pelo qual o aprovado informa formalmente que não tem interesse em assumir a vaga. Ele é fundamental para que a comissão possa antecipar convocações, organizar a ordem de nomeação e evitar perdas de prazo.
-            </CardDescription>
+            <CardDescription className="text-sm text-slate-600">{content.overview}</CardDescription>
           </div>
 
           {isComissao && (
@@ -92,24 +91,33 @@ export function TdsDashboard({ data, isComissao }: TdsDashboardProps) {
         <CardContent className="grid gap-6 pt-4 md:grid-cols-2">
           <div className="space-y-2 text-sm text-slate-700">
             <p className="font-semibold text-slate-800">Orientações gerais:</p>
-            <ul className="list-disc space-y-1 pl-5">
-              <li>Preencha o TD com atenção, conferindo seus dados pessoais e o cargo/cota para o qual foi aprovado.</li>
-              <li>Assine digitalmente ou de acordo com a orientação formal do Tribunal.</li>
-              <li>Envie o documento nos canais oficiais indicados no edital ou pela comissão.</li>
-            </ul>
+            <div className="space-y-2 text-slate-600">
+              {content.instructions.split(/\n+/).filter(Boolean).map((paragraph, index) => (
+                <p key={`td-instruction-${index}`}>{paragraph}</p>
+              ))}
+            </div>
           </div>
 
           <div className="space-y-3 text-sm text-slate-700">
             <p className="font-semibold text-slate-800">Modelos de TD:</p>
-            <div className="flex flex-wrap gap-2">
-              <a href="#" className="inline-flex items-center rounded-full border border-amber-300 bg-white/80 px-3 py-1 text-xs font-medium text-amber-800 shadow-sm hover:bg-white">
-                Modelo TD - Ampla / PPP (PDF)
-              </a>
-              <a href="#" className="inline-flex items-center rounded-full border border-amber-300 bg-white/80 px-3 py-1 text-xs font-medium text-amber-800 shadow-sm hover:bg-white">
-                Modelo TD - PCD / Indígena (Word)
-              </a>
-            </div>
-            <p className="text-xs text-slate-500">A comissão pode atualizar esses links a qualquer momento, mantendo os modelos sempre alinhados ao Tribunal.</p>
+            {content.models.length ? (
+              <div className="flex flex-wrap gap-2">
+                {content.models.map((model, index) => (
+                  <a
+                    key={`td-model-${index}`}
+                    href={model.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center rounded-full border border-amber-300 bg-white/80 px-3 py-1 text-xs font-medium text-amber-800 shadow-sm hover:bg-white"
+                  >
+                    {model.label}
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500">Nenhum modelo cadastrado pela comissão.</p>
+            )}
+            <p className="text-xs text-slate-500">Os links podem ser atualizados pelo painel da comissão.</p>
           </div>
         </CardContent>
       </Card>

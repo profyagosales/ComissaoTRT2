@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import type { TdRequestTipo } from "@/features/tds/td-types"
+import { DEFAULT_TD_CONTENT, type TdContentSettings } from "@/features/tds/td-content"
 
 type OutraAprovacaoQueryRow = {
   id: string
@@ -116,14 +117,25 @@ export type LatestVacancia = {
 
 type VacanciaRow = {
   id: string
-  data: string | null
-  data_referencia: string | null
-  tribunal: string | null
-  cargo: string | null
-  motivo: string | null
-  tipo: string | null
-  nome_servidor: string | null
+  created_at: string
+  updated_at: string | null
+  [key: string]: string | number | null | undefined
 }
+
+type NotificationQueueRow = {
+  id: string
+  titulo: string
+  corpo: string
+  tipo: string | null
+  visivel_para: string | null
+  status: string
+  metadata: Record<string, unknown> | null
+  created_at: string
+  scheduled_for: string | null
+  sent_at: string | null
+  error_message: string | null
+}
+
 
 export type CandidateSummary = {
   id: string
@@ -147,6 +159,37 @@ export type ComissaoDashboardData = {
   csjtAuthorizationsHistory: CsjtAuthorizationRecord[]
   cargosVagosHistory: CargosVagosRecord[]
   candidates: CandidateSummary[]
+  vacanciasHistory: VacanciaRecord[]
+  notificationsQueue: NotificationQueueItem[]
+  tdContent: TdContentSettings
+}
+
+export type VacanciaRecord = {
+  id: string
+  data: string | null
+  tribunal: string | null
+  cargo: string | null
+  motivo: string | null
+  tipo: string | null
+  nomeServidor: string | null
+  douLink: string | null
+  observacao: string | null
+  createdAt: string
+  updatedAt: string | null
+}
+
+export type NotificationQueueItem = {
+  id: string
+  titulo: string
+  corpo: string
+  tipo: string | null
+  visivelPara: string | null
+  status: string
+  metadata: Record<string, unknown> | null
+  createdAt: string
+  scheduledFor: string | null
+  sentAt: string | null
+  errorMessage: string | null
 }
 
 export async function loadComissaoData(): Promise<ComissaoDashboardData> {
@@ -158,8 +201,10 @@ export async function loadComissaoData(): Promise<ComissaoDashboardData> {
     loasResult,
     csjtResult,
     cargosVagosResult,
-    latestVacanciaResult,
+    vacanciasHistoryResult,
     candidatesResult,
+    tdContentResult,
+    notificationsQueueResult,
   ] = await Promise.all([
     supabase
       .from("outras_aprovacoes")
@@ -192,14 +237,23 @@ export async function loadComissaoData(): Promise<ComissaoDashboardData> {
     supabase
       .from("vacancias")
       .select("*")
-      .order("data", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .order("created_at", { ascending: false })
+      .limit(10),
     supabase
       .from("candidates")
       .select("id, nome, sistema_concorrencia, classificacao_lista, status_nomeacao, ordem_nomeacao_base")
       .order("ordem_nomeacao_base", { ascending: true })
       .limit(200),
+    supabase
+      .from("td_content_settings")
+      .select("content")
+      .eq("key", "td_guides")
+      .maybeSingle<{ content: TdContentSettings | null }>(),
+    supabase
+      .from("notifications_queue")
+      .select("id, titulo, corpo, tipo, visivel_para, status, metadata, created_at, scheduled_for, sent_at, error_message")
+      .order("created_at", { ascending: false })
+      .limit(20),
   ])
 
   if (outrasAprovacoesResult.error) {
@@ -403,28 +457,81 @@ export async function loadComissaoData(): Promise<ComissaoDashboardData> {
     updatedAt: null,
   }))
 
+  if (vacanciasHistoryResult.error) {
+    console.error("[loadComissaoData] erro ao buscar vacâncias", vacanciasHistoryResult.error)
+    throw new Error("Não foi possível carregar as vacâncias cadastradas.")
+  }
+
+  const vacanciasRows: VacanciaRow[] = (vacanciasHistoryResult.data ?? []) as VacanciaRow[]
+
+  const readString = (row: VacanciaRow, keys: string[]): string | null => {
+    for (const key of keys) {
+      const value = row[key]
+      if (typeof value === "string" && value.length) return value
+    }
+    return null
+  }
+
+  const vacanciasHistory: VacanciaRecord[] = vacanciasRows.map((row: VacanciaRow) => ({
+    id: row.id,
+    data: readString(row, ["data", "data_vacancia", "data_evento", "data_publicacao"]) ?? row.created_at ?? null,
+    tribunal: readString(row, ["tribunal", "local", "unidade"]),
+    cargo: readString(row, ["cargo", "cargo_afetado"]),
+    motivo: readString(row, ["motivo", "motivo_saida"]),
+    tipo: readString(row, ["tipo", "tipo_evento"]),
+    nomeServidor: readString(row, ["nome_servidor", "servidor", "nome"]),
+    douLink: readString(row, ["dou_link", "link", "fonte_url"]),
+    observacao: readString(row, ["observacao", "observacoes", "detalhes"]),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at ?? null,
+  }))
+
   const latestLoa: LatestLoa | null = loasHistory[0] ?? null
   const latestCsjtAuthorization: LatestCsjtAuthorization | null = csjtAuthorizationsHistory[0] ?? null
   const latestCargosVagos: LatestCargosVagos | null = cargosVagosHistory[0] ?? null
-
-  let latestVacancia: LatestVacancia | null = null
-  if (latestVacanciaResult.data) {
-    const row = latestVacanciaResult.data as VacanciaRow
-    latestVacancia = {
-      id: row.id,
-      data: row.data ?? row.data_referencia ?? null,
-      tribunal: row.tribunal ?? null,
-      cargo: row.cargo ?? null,
-      motivo: row.motivo ?? null,
-      tipo: row.tipo ?? null,
-      nomeServidor: row.nome_servidor ?? null,
-    }
-  } else if (latestVacanciaResult.error && latestVacanciaResult.error.code !== "PGRST116") {
-    // PGRST116 => no rows
-    console.error("[loadComissaoData] erro ao buscar vacâncias", latestVacanciaResult.error)
-  }
+  const latestVacancia: LatestVacancia | null = vacanciasHistory[0]
+    ? {
+        id: vacanciasHistory[0].id,
+        data: vacanciasHistory[0].data,
+        tribunal: vacanciasHistory[0].tribunal,
+        cargo: vacanciasHistory[0].cargo,
+        motivo: vacanciasHistory[0].motivo,
+        tipo: vacanciasHistory[0].tipo,
+        nomeServidor: vacanciasHistory[0].nomeServidor,
+      }
+    : null
 
   const candidates = candidateSummaries
+  let tdContent: TdContentSettings = DEFAULT_TD_CONTENT
+  if (tdContentResult.data?.content) {
+    tdContent = {
+      overview: tdContentResult.data.content.overview || DEFAULT_TD_CONTENT.overview,
+      instructions: tdContentResult.data.content.instructions || DEFAULT_TD_CONTENT.instructions,
+      models: Array.isArray(tdContentResult.data.content.models) && tdContentResult.data.content.models.length
+        ? tdContentResult.data.content.models.filter((model) => Boolean(model?.label) && Boolean(model?.url))
+        : DEFAULT_TD_CONTENT.models,
+    }
+  } else if (tdContentResult.error && tdContentResult.error.code !== "PGRST116") {
+    console.error("[loadComissaoData] erro ao buscar td_content_settings", tdContentResult.error)
+  }
+
+  const notificationsQueue: NotificationQueueItem[] = (notificationsQueueResult.data ?? []).map((row: NotificationQueueRow) => ({
+    id: row.id,
+    titulo: row.titulo,
+    corpo: row.corpo,
+    tipo: row.tipo,
+    visivelPara: row.visivel_para,
+    status: row.status,
+    metadata: row.metadata ?? null,
+    createdAt: row.created_at,
+    scheduledFor: row.scheduled_for,
+    sentAt: row.sent_at,
+    errorMessage: row.error_message,
+  }))
+
+  if (notificationsQueueResult.error && notificationsQueueResult.error.code !== "PGRST116") {
+    console.error("[loadComissaoData] erro ao buscar notifications_queue", notificationsQueueResult.error)
+  }
 
   return {
     outrasAprovacoes,
@@ -439,5 +546,8 @@ export async function loadComissaoData(): Promise<ComissaoDashboardData> {
     csjtAuthorizationsHistory,
     cargosVagosHistory,
     candidates,
+    vacanciasHistory,
+    notificationsQueue,
+    tdContent,
   }
 }
