@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { mapTipoTdToCandidateStatus } from "@/features/tds/td-types"
-import type { TdRequestTipo } from "@/features/tds/td-types"
+import type { CandidateTdStatus, TdRequestTipo } from "@/features/tds/td-types"
 
 type Decision = "APROVAR" | "REJEITAR"
 
@@ -24,6 +24,83 @@ type CsjtDestinoInput = {
   tribunal: string
   cargo?: string
   quantidade: number
+}
+
+type OutraAprovacaoModerationRow = {
+  id: string
+  candidate_id: string
+  orgao: string | null
+  cargo: string | null
+  ja_foi_nomeado: string | null
+  pretende_assumir: string | null
+}
+
+type SupabaseServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>
+
+async function applyCandidateStatusFromOutraAprovacao(
+  supabase: SupabaseServerClient,
+  approval: OutraAprovacaoModerationRow,
+  referenceDate: string,
+) {
+  if (!approval?.candidate_id) return
+
+  const jaFoiNomeado = approval.ja_foi_nomeado ?? "NAO"
+  const pretendeAssumir = approval.pretende_assumir ?? "INDEFINIDO"
+
+  let tdStatus: Exclude<CandidateTdStatus, null> | null = null
+  if (jaFoiNomeado === "SIM") {
+    tdStatus = "SIM"
+  } else if (pretendeAssumir === "SIM") {
+    tdStatus = "TALVEZ"
+  }
+
+  if (!tdStatus) {
+    return
+  }
+
+  const cargoLabel = approval.cargo ?? "Cargo não informado"
+  const orgaoLabel = approval.orgao ?? "Outro órgão"
+  const obsBase = tdStatus === "SIM" ? `Nomeado no ${orgaoLabel}.` : `Pretende assumir ${orgaoLabel}.`
+  const obs = `${obsBase} Cargo: ${cargoLabel}. Atualizado em ${formatPtBr(referenceDate)}.`
+
+  const { error } = await supabase
+    .from("candidates")
+    .update({ td_status: tdStatus, td_observacao: obs })
+    .eq("id", approval.candidate_id)
+
+  if (error) {
+    console.error("[applyCandidateStatusFromOutraAprovacao] erro ao atualizar candidato", error)
+  }
+}
+
+async function resetCandidateTdStatusIfMatches(
+  supabase: SupabaseServerClient,
+  candidateId: string,
+  expectedStatus: Exclude<CandidateTdStatus, null>,
+) {
+  const { data, error } = await supabase
+    .from("candidates")
+    .select("td_status")
+    .eq("id", candidateId)
+    .maybeSingle<{ td_status: CandidateTdStatus }>()
+
+  if (error) {
+    console.error("[resetCandidateTdStatusIfMatches] erro ao buscar candidato", error)
+    return
+  }
+
+  if (data?.td_status !== expectedStatus) {
+    return
+  }
+
+  const { error: resetError } = await supabase
+    .from("candidates")
+    .update({ td_status: null, td_observacao: null })
+    .eq("id", candidateId)
+
+  if (resetError) {
+    console.error("[resetCandidateTdStatusIfMatches] erro ao redefinir TD do candidato", resetError)
+  }
 }
 
 async function assertComissaoUser(): Promise<SupabaseUser> {
@@ -84,6 +161,17 @@ export async function moderateOutraAprovacaoAction(params: { approvalId: string;
   const supabase = await createSupabaseServerClient()
   const user = await assertComissaoUser()
 
+  const { data: approvalRow, error: approvalFetchError } = await supabase
+    .from("outras_aprovacoes")
+    .select("id, candidate_id, orgao, cargo, ja_foi_nomeado, pretende_assumir")
+    .eq("id", params.approvalId)
+    .maybeSingle<OutraAprovacaoModerationRow>()
+
+  if (approvalFetchError || !approvalRow) {
+    console.error("[moderateOutraAprovacaoAction] erro ao buscar aprovação", approvalFetchError)
+    throw new Error("Registro de aprovação não encontrado.")
+  }
+
   const status = params.decision === "APROVAR" ? "APROVADO" : "RECUSADO"
   const now = new Date().toISOString()
 
@@ -102,8 +190,13 @@ export async function moderateOutraAprovacaoAction(params: { approvalId: string;
     throw new Error("Não foi possível atualizar essa aprovação agora.")
   }
 
+  if (params.decision === "APROVAR") {
+    await applyCandidateStatusFromOutraAprovacao(supabase, approvalRow, now)
+  }
+
   revalidatePath("/comissao")
   revalidatePath("/listas")
+  revalidatePath("/resumo")
 }
 
 export async function moderateTdRequestAction(params: { requestId: string; decision: Decision }) {
@@ -128,6 +221,7 @@ export async function moderateTdRequestAction(params: { requestId: string; decis
 
   const status = params.decision === "APROVAR" ? "APROVADO" : "REJEITADO"
   const now = new Date().toISOString()
+  const requestedTdStatus = mapTipoTdToCandidateStatus(request.tipo_td)
 
   const { error } = await supabase
     .from("td_requests")
@@ -145,7 +239,7 @@ export async function moderateTdRequestAction(params: { requestId: string; decis
   }
 
   if (params.decision === "APROVAR") {
-    const tdStatus = mapTipoTdToCandidateStatus(request.tipo_td)
+    const tdStatus = requestedTdStatus
     const defaultObs = `TD ${request.tipo_td === "ENVIADO" ? "confirmado" : "em preparação"} (${new Intl.DateTimeFormat("pt-BR").format(new Date())})`
     const { error: candidateError } = await supabase
       .from("candidates")
@@ -158,6 +252,8 @@ export async function moderateTdRequestAction(params: { requestId: string; decis
     if (candidateError) {
       console.error("[moderateTdRequestAction] erro ao atualizar candidato", candidateError)
     }
+  } else if (requestedTdStatus) {
+    await resetCandidateTdStatusIfMatches(supabase, request.candidate_id, requestedTdStatus)
   }
 
   revalidatePath("/comissao")

@@ -80,7 +80,6 @@ type CandidateRow = {
   status_nomeacao: string | null
   td_status: string | null
   td_observacao: string | null
-  outras_aprovacoes_resumo?: string | null
   outras_aprovacoes?: CandidateOutraAprovacaoRow[] | null
 }
 
@@ -95,7 +94,6 @@ type CandidateOutraAprovacaoRow = {
   observacao: string | null
   status: string | null
   approved_at?: string | null
-  approved_by?: string | null
 }
 
 type TdRow = {
@@ -338,7 +336,6 @@ export async function loadListasData(): Promise<ListasData> {
       status_nomeacao,
       td_status,
       td_observacao,
-      outras_aprovacoes_resumo,
       outras_aprovacoes:outras_aprovacoes (
         id,
         orgao,
@@ -349,8 +346,7 @@ export async function loadListasData(): Promise<ListasData> {
         ja_foi_nomeado,
         observacao,
         status,
-        approved_at,
-        approved_by
+        approved_at
       )`,
     )
     .order('ordem_nomeacao_base', { ascending: true })

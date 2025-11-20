@@ -27,5 +27,4 @@ export type OutraAprovacaoListItem = {
   created_at?: string | null
   updated_at?: string | null
   approved_at?: string | null
-  approved_by?: string | null
 }

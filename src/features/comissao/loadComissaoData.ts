@@ -1,16 +1,13 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import type { TdRequestTipo } from "@/features/tds/td-types"
 
-type CandidateInfo = { id: string; nome: string; email: string }
-
 type OutraAprovacaoQueryRow = {
   id: string
-  cargo_pretendido: string
+  candidate_id: string
+  cargo: string
   orgao: string
-  localidade: string
   status: string
   created_at: string
-  candidate: CandidateInfo | CandidateInfo[] | null
 }
 
 type TdRequestQueryRow = {
@@ -20,23 +17,27 @@ type TdRequestQueryRow = {
   observacao: string | null
   status: string
   created_at: string
-  candidate: CandidateInfo | CandidateInfo[] | null
 }
 
-function resolveCandidate(candidate: CandidateInfo | CandidateInfo[] | null): CandidateInfo | null {
-  if (!candidate) return null
-  if (Array.isArray(candidate)) {
-    return candidate[0] ?? null
-  }
-  return candidate
+type CsjtAuthorizationRow = {
+  id: string
+  loa_id: string | null
+  data_autorizacao: string
+  total_provimentos: number
+  observacao: string | null
+  created_at: string
 }
 
-function resolveRelation<TValue>(value: TValue | TValue[] | null | undefined): TValue | null {
-  if (!value) return null
-  if (Array.isArray(value)) {
-    return value[0] ?? null
-  }
-  return value
+type CsjtDestinoRow = {
+  csjt_autorizacao_id: string
+  tribunal: string
+  cargo: string | null
+  quantidade: number
+}
+
+type LoaAnoRow = {
+  id: string
+  ano: number
 }
 
 export type PendingOutraAprovacao = {
@@ -46,7 +47,6 @@ export type PendingOutraAprovacao = {
   candidatoId: string
   cargoPretendido: string
   orgao: string
-  localidade: string
   status: string
   createdAt: string
 }
@@ -164,13 +164,13 @@ export async function loadComissaoData(): Promise<ComissaoDashboardData> {
     supabase
       .from("outras_aprovacoes")
       .select(
-        `id, cargo_pretendido, orgao, localidade, status, created_at, updated_at, candidate:candidates(id, nome, email)`
+        "id, candidate_id, cargo, orgao, status, created_at"
       )
       .eq("status", "PENDENTE")
       .order("created_at", { ascending: false }),
     supabase
       .from("td_requests")
-      .select(`id, candidate_id, tipo_td, observacao, status, created_at, candidate:candidates(id, nome, email)`)
+      .select("id, candidate_id, tipo_td, observacao, status, created_at")
       .eq("status", "PENDENTE")
       .order("created_at", { ascending: false }),
     supabase
@@ -181,14 +181,12 @@ export async function loadComissaoData(): Promise<ComissaoDashboardData> {
       .limit(5),
     supabase
       .from("csjt_autorizacoes")
-      .select(
-        `id, loa_id, data_autorizacao, total_provimentos, observacao, created_at, updated_at, loa:loas(id, ano), destinos:csjt_autorizacoes_destinos(id, tribunal, cargo, quantidade)`
-      )
+      .select("id, loa_id, data_autorizacao, total_provimentos, observacao, created_at")
       .order("data_autorizacao", { ascending: false })
       .limit(5),
     supabase
       .from("cargos_vagos_trt2")
-      .select("id, data_referencia, analista_vagos, tecnico_vagos, observacao, fonte_url, created_at, updated_at")
+      .select("id, data_referencia, analista_vagos, tecnico_vagos, observacao, fonte_url, created_at")
       .order("data_referencia", { ascending: false })
       .limit(5),
     supabase
@@ -201,7 +199,7 @@ export async function loadComissaoData(): Promise<ComissaoDashboardData> {
       .from("candidates")
       .select("id, nome, sistema_concorrencia, classificacao_lista, status_nomeacao, ordem_nomeacao_base")
       .order("ordem_nomeacao_base", { ascending: true })
-      .limit(120),
+      .limit(200),
   ])
 
   if (outrasAprovacoesResult.error) {
@@ -216,42 +214,9 @@ export async function loadComissaoData(): Promise<ComissaoDashboardData> {
 
   const outrasRows = (outrasAprovacoesResult.data ?? []) as OutraAprovacaoQueryRow[]
 
-  const outrasAprovacoes: PendingOutraAprovacao[] = outrasRows
-    .map((item) => {
-      const candidate = resolveCandidate(item.candidate)
-      if (!candidate) return null
-      return {
-        id: item.id,
-        candidatoNome: candidate.nome,
-        candidatoEmail: candidate.email,
-        candidatoId: candidate.id,
-        cargoPretendido: item.cargo_pretendido,
-        orgao: item.orgao,
-        localidade: item.localidade,
-        status: item.status,
-        createdAt: item.created_at,
-      }
-    })
-    .filter((item): item is PendingOutraAprovacao => Boolean(item))
-
   const tdRows = (tdRequestsResult.data ?? []) as TdRequestQueryRow[]
 
-  const tdRequests: PendingTdRequest[] = tdRows
-    .map((item) => {
-      const candidate = resolveCandidate(item.candidate)
-      if (!candidate) return null
-      return {
-        id: item.id,
-        candidatoId: candidate.id,
-        candidatoNome: candidate.nome,
-        candidatoEmail: candidate.email,
-        tipoTd: item.tipo_td ?? "INTERESSE",
-        observacao: item.observacao,
-        status: item.status,
-        createdAt: item.created_at,
-      }
-    })
-    .filter((item): item is PendingTdRequest => Boolean(item))
+  const csjtRows = (csjtResult.data ?? []) as CsjtAuthorizationRow[]
 
   if (loasResult.error) {
     console.error("[loadComissaoData] erro ao buscar LOAs", loasResult.error)
@@ -273,6 +238,81 @@ export async function loadComissaoData(): Promise<ComissaoDashboardData> {
     throw new Error("Não foi possível carregar os candidatos.")
   }
 
+  const candidateSummaries: CandidateSummary[] = (candidatesResult.data ?? []).map((row) => ({
+    id: row.id,
+    nome: row.nome,
+    sistemaConcorrencia: row.sistema_concorrencia,
+    classificacaoLista: row.classificacao_lista,
+    statusNomeacao: row.status_nomeacao,
+    ordemNomeacao: row.ordem_nomeacao_base,
+  }))
+
+  const candidateMap = new Map(candidateSummaries.map((candidate) => [candidate.id, candidate]))
+
+  const pendingCandidateIds = new Set<string>()
+  outrasRows.forEach((row) => pendingCandidateIds.add(row.candidate_id))
+  tdRows.forEach((row) => pendingCandidateIds.add(row.candidate_id))
+
+  const missingCandidateIds = Array.from(pendingCandidateIds).filter((id) => !candidateMap.has(id))
+
+  if (missingCandidateIds.length) {
+    const { data: missingCandidates, error: missingCandidatesError } = await supabase
+      .from("candidates")
+      .select("id, nome, sistema_concorrencia, classificacao_lista, status_nomeacao, ordem_nomeacao_base")
+      .in("id", missingCandidateIds)
+
+    if (missingCandidatesError) {
+      console.error("[loadComissaoData] erro ao buscar candidatos complementares", missingCandidatesError)
+    } else {
+      missingCandidates?.forEach((row) => {
+        const summary: CandidateSummary = {
+          id: row.id,
+          nome: row.nome,
+          sistemaConcorrencia: row.sistema_concorrencia,
+          classificacaoLista: row.classificacao_lista,
+          statusNomeacao: row.status_nomeacao,
+          ordemNomeacao: row.ordem_nomeacao_base,
+        }
+        candidateSummaries.push(summary)
+        candidateMap.set(summary.id, summary)
+      })
+    }
+  }
+
+  const outrasAprovacoes: PendingOutraAprovacao[] = outrasRows
+    .map((item) => {
+      const candidate = candidateMap.get(item.candidate_id)
+      if (!candidate) return null
+      return {
+        id: item.id,
+        candidatoNome: candidate.nome,
+        candidatoEmail: "",
+        candidatoId: candidate.id,
+        cargoPretendido: item.cargo,
+        orgao: item.orgao,
+        status: item.status,
+        createdAt: item.created_at,
+      }
+    })
+    .filter((item): item is PendingOutraAprovacao => Boolean(item))
+
+  const tdRequests: PendingTdRequest[] = tdRows
+    .map((item) => {
+      const candidate = candidateMap.get(item.candidate_id)
+      if (!candidate) return null
+      return {
+        id: item.id,
+        candidatoId: candidate.id,
+        candidatoNome: candidate.nome,
+        candidatoEmail: "",
+        tipoTd: item.tipo_td ?? "INTERESSE",
+        observacao: item.observacao,
+        status: item.status,
+        createdAt: item.created_at,
+      }
+    })
+    .filter((item): item is PendingTdRequest => Boolean(item))
+
   const loasHistory: LoaHistoryRecord[] = (loasResult.data ?? []).map((row) => ({
     id: row.id,
     ano: row.ano,
@@ -283,23 +323,72 @@ export async function loadComissaoData(): Promise<ComissaoDashboardData> {
     createdAt: row.created_at,
   }))
 
-  const csjtAuthorizationsHistory: CsjtAuthorizationRecord[] = (csjtResult.data ?? []).map((row) => {
-    const destinos = row.destinos ?? []
-    const relatedLoa = resolveRelation(row.loa)
+  const csjtDestinosMap = new Map<string, CsjtDestinoRow[]>()
+  if (csjtRows.length) {
+    const csjtIds = csjtRows.map((row) => row.id)
+    const { data: destinosData, error: destinosError } = await supabase
+      .from("csjt_autorizacoes_destinos")
+      .select("csjt_autorizacao_id, tribunal, cargo, quantidade")
+      .in("csjt_autorizacao_id", csjtIds)
+
+    if (destinosError) {
+      console.error("[loadComissaoData] erro ao buscar destinos CSJT", destinosError)
+    } else {
+      const destinoRows = (destinosData ?? []) as CsjtDestinoRow[]
+      destinoRows.forEach((row) => {
+        const existing = csjtDestinosMap.get(row.csjt_autorizacao_id) ?? []
+        existing.push(row)
+        csjtDestinosMap.set(row.csjt_autorizacao_id, existing)
+      })
+    }
+  }
+
+  const loaMap = new Map<string, { ano: number }>()
+  loasHistory.forEach((row) => {
+    loaMap.set(row.id, { ano: row.ano })
+  })
+
+  const loaIdsFromCsjt = Array.from(
+    new Set(
+      csjtRows
+        .map((row) => row.loa_id)
+        .filter((value): value is string => Boolean(value) && !loaMap.has(value))
+    )
+  )
+
+  if (loaIdsFromCsjt.length) {
+    const { data: missingLoas, error: missingLoasError } = await supabase
+      .from("loas")
+      .select("id, ano")
+      .in("id", loaIdsFromCsjt)
+
+    if (missingLoasError) {
+      console.error("[loadComissaoData] erro ao buscar LOAs complementares", missingLoasError)
+    } else {
+      const loaRows = (missingLoas ?? []) as LoaAnoRow[]
+      loaRows.forEach((row) => {
+        loaMap.set(row.id, { ano: row.ano })
+      })
+    }
+  }
+
+  const csjtAuthorizationsHistory: CsjtAuthorizationRecord[] = csjtRows.map((row) => {
+    const destinos = csjtDestinosMap.get(row.id) ?? []
+    const loaInfo = row.loa_id ? loaMap.get(row.loa_id) : null
     return {
       id: row.id,
-      loaId: row.loa_id ?? relatedLoa?.id ?? null,
+      loaId: row.loa_id ?? null,
       dataAutorizacao: row.data_autorizacao,
       totalProvimentos: row.total_provimentos,
       observacao: row.observacao ?? null,
-      loaAno: relatedLoa?.ano ?? null,
+      loaAno: loaInfo?.ano ?? null,
       destinos: destinos.map((destino) => ({
         tribunal: destino.tribunal,
-        cargo: destino.cargo,
+        cargo: destino.cargo ?? "—",
         quantidade: destino.quantidade,
       })),
       createdAt: row.created_at,
-      updatedAt: row.updated_at,
+      updatedAt: null,
     }
   })
 
@@ -311,7 +400,7 @@ export async function loadComissaoData(): Promise<ComissaoDashboardData> {
     observacao: row.observacao ?? null,
     fonteUrl: row.fonte_url ?? null,
     createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    updatedAt: null,
   }))
 
   const latestLoa: LatestLoa | null = loasHistory[0] ?? null
@@ -335,14 +424,7 @@ export async function loadComissaoData(): Promise<ComissaoDashboardData> {
     console.error("[loadComissaoData] erro ao buscar vacâncias", latestVacanciaResult.error)
   }
 
-  const candidates: CandidateSummary[] = (candidatesResult.data ?? []).map((row) => ({
-    id: row.id,
-    nome: row.nome,
-    sistemaConcorrencia: row.sistema_concorrencia,
-    classificacaoLista: row.classificacao_lista,
-    statusNomeacao: row.status_nomeacao,
-    ordemNomeacao: row.ordem_nomeacao_base,
-  }))
+  const candidates = candidateSummaries
 
   return {
     outrasAprovacoes,

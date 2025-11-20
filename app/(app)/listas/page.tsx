@@ -3,7 +3,14 @@ import { redirect } from 'next/navigation'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { loadListasData, LISTA_KEYS, type ListaKey } from '@/features/listas/loadListasData'
 import { ListasDashboard } from '@/features/listas/ListasDashboard'
-import { saveOutraAprovacaoAction, type JaNomeadoChoice, type PretendeAssumirChoice, type SistemaConcorrencia } from '@/features/listas/listas-actions'
+import {
+  requestOutraAprovacaoCreate,
+  requestOutraAprovacaoUpdate,
+  type JaNomeadoChoice,
+  type PretendeAssumirChoice,
+  type SaveOutraAprovacaoInput,
+  type SistemaConcorrencia,
+} from '@/features/listas/listas-actions'
 import type { CandidateListasProfile, OutraAprovacaoListItem } from '@/features/listas/types'
 
 export const dynamic = 'force-dynamic'
@@ -44,6 +51,31 @@ function normalizeJaNomeado(value: string | null): JaNomeadoChoice {
 function normalizeApprovalStatus(value: string | null): 'PENDENTE' | 'APROVADO' | 'RECUSADO' {
   if (value === 'APROVADO' || value === 'RECUSADO') return value
   return 'PENDENTE'
+}
+
+async function handleCandidateOutraAprovacao(input: SaveOutraAprovacaoInput) {
+  'use server'
+
+  const basePayload = {
+    candidateId: input.candidateId,
+    orgao: input.orgao,
+    cargo: input.cargo,
+    sistemaConcorrencia: input.sistemaConcorrencia,
+    classificacao: input.classificacao ?? null,
+    pretendeAssumir: input.pretendeAssumir,
+    jaNomeado: input.jaNomeado,
+    observacao: input.observacao ?? null,
+  }
+
+  if (input.id) {
+    await requestOutraAprovacaoUpdate({
+      approvalId: input.id,
+      ...basePayload,
+    })
+    return
+  }
+
+  await requestOutraAprovacaoCreate(basePayload)
 }
 
 export default async function ListasPage(props: ListasPageProps) {
@@ -103,7 +135,7 @@ export default async function ListasPage(props: ListasPageProps) {
 
     const { data: aprovacoesRows, error: aprovacoesError } = await supabase
       .from('outras_aprovacoes')
-      .select('id, orgao, cargo, sistema_concorrencia, classificacao, pretende_assumir, ja_foi_nomeado, observacao, status, created_at, updated_at, approved_at, approved_by')
+      .select('id, orgao, cargo, sistema_concorrencia, classificacao, pretende_assumir, ja_foi_nomeado, observacao, status, created_at, updated_at, approved_at')
       .eq('candidate_id', profile.candidate_id)
       .order('updated_at', { ascending: false })
       .order('created_at', { ascending: false })
@@ -126,7 +158,6 @@ export default async function ListasPage(props: ListasPageProps) {
         created_at: row.created_at ?? null,
         updated_at: row.updated_at ?? null,
         approved_at: row.approved_at ?? null,
-        approved_by: row.approved_by ?? null,
       }))
     }
   }
@@ -138,7 +169,7 @@ export default async function ListasPage(props: ListasPageProps) {
       selectedListKey={selectedListKey}
       currentCandidate={candidateProfile ?? undefined}
       outrasAprovacoes={outrasAprovacoes}
-      onSaveOutraAprovacao={candidateProfile ? saveOutraAprovacaoAction : undefined}
+      onSaveOutraAprovacao={candidateProfile ? handleCandidateOutraAprovacao : undefined}
     />
   )
 }

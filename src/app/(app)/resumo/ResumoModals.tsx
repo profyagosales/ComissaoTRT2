@@ -3,11 +3,8 @@
 import { useRouter } from 'next/navigation'
 import React, { useState, useTransition } from 'react'
 
-import {
-  createOutraAprovacao,
-  createTdRequest,
-  updateUserProfileContact,
-} from './resumo-actions'
+import { createTdRequest, updateUserProfileContact } from './resumo-actions'
+import { requestOutraAprovacaoCreate } from '@/features/listas/listas-actions'
 import type { TdRequestTipo } from '@/features/tds/td-types'
 
 type BaseModalProps = {
@@ -349,12 +346,12 @@ export function MinhasAprovacoesModal({
 
     startTransition(async () => {
       try {
-        await createOutraAprovacao({
+        await requestOutraAprovacaoCreate({
           candidateId,
           orgao: orgao.trim(),
           cargo: cargo.trim(),
           sistemaConcorrencia: sistema,
-          classificacao: classificacaoNumber,
+          classificacao: classificacaoNumber ?? null,
           pretendeAssumir,
           jaNomeado,
           observacao: observacao || undefined,
