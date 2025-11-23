@@ -195,6 +195,31 @@ export type NotificationQueueItem = {
 export async function loadComissaoData(): Promise<ComissaoDashboardData> {
   const supabase = await createSupabaseServerClient()
 
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    console.error("[loadComissaoData] usuário não autenticado ou erro no auth", authError)
+    throw new Error("Você precisa estar autenticado para acessar a comissão.")
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("user_profiles")
+    .select("role")
+    .eq("user_id", user.id)
+    .maybeSingle<{ role: string | null }>()
+
+  if (profileError) {
+    console.error("[loadComissaoData] erro ao buscar perfil da comissão", profileError)
+    throw new Error("Não foi possível validar o acesso da comissão.")
+  }
+
+  if (profile?.role !== "COMISSAO") {
+    throw new Error("Acesso restrito aos membros da comissão.")
+  }
+
   const [
     outrasAprovacoesResult,
     tdRequestsResult,

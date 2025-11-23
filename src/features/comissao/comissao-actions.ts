@@ -37,6 +37,146 @@ type OutraAprovacaoModerationRow = {
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>
 
+type ColumnSet = Set<string> | null
+
+const tableColumnCache = new Map<string, ColumnSet>()
+
+const TABLE_COLUMN_FALLBACKS: Record<string, string[]> = {
+  "public.csjt_autorizacoes": [
+    "id",
+    "loa_id",
+    "data_autorizacao",
+    "total_provimentos",
+    "observacao",
+    "created_at",
+  ],
+  "csjt_autorizacoes": [
+    "id",
+    "loa_id",
+    "data_autorizacao",
+    "total_provimentos",
+    "observacao",
+    "created_at",
+  ],
+  "public.cargos_vagos_trt2": [
+    "id",
+    "data_referencia",
+    "analista_vagos",
+    "tecnico_vagos",
+    "observacao",
+    "fonte_url",
+    "created_at",
+  ],
+  "cargos_vagos_trt2": [
+    "id",
+    "data_referencia",
+    "analista_vagos",
+    "tecnico_vagos",
+    "observacao",
+    "fonte_url",
+    "created_at",
+  ],
+}
+
+const VACANCIA_COLUMN_ALIASES = {
+  data: ["data", "data_vacancia", "data_evento", "data_publicacao"],
+  tribunal: ["tribunal", "local", "unidade"],
+  cargo: ["cargo", "cargo_afetado"],
+  motivo: ["motivo", "motivo_saida"],
+  tipo: ["tipo", "tipo_evento"],
+  nomeServidor: ["nome_servidor", "servidor", "nome"],
+  douLink: ["dou_link", "link", "fonte_url"],
+  observacao: ["observacao", "observacoes", "detalhes"],
+}
+
+function resolveFallbackColumns(cacheKey: string, tableName: string): ColumnSet {
+  const fallbackColumns = TABLE_COLUMN_FALLBACKS[cacheKey] ?? TABLE_COLUMN_FALLBACKS[tableName]
+  if (!fallbackColumns?.length) {
+    return null
+  }
+
+  return new Set(fallbackColumns)
+}
+
+async function getTableColumns(supabase: SupabaseServerClient, table: string): Promise<ColumnSet> {
+  const [schema = "public", tableName] = table.includes(".") ? table.split(".") : ["public", table]
+  const cacheKey = `${schema}.${tableName}`
+  if (tableColumnCache.has(cacheKey)) {
+    return tableColumnCache.get(cacheKey) ?? null
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("information_schema.columns")
+      .select("column_name")
+      .eq("table_schema", schema)
+      .eq("table_name", tableName)
+
+    if (!error && data && data.length) {
+      const columns = new Set(data.map((row) => row.column_name as string))
+      tableColumnCache.set(cacheKey, columns)
+      return columns
+    }
+  } catch (error) {
+    console.error(`[comissao-actions] falha ao ler information_schema para ${cacheKey}`, error)
+  }
+
+  try {
+    const { data, error } = await supabase.from(tableName).select("*").limit(1)
+    if (error) {
+      console.error(`[comissao-actions] erro ao inspecionar colunas de ${tableName}`, error)
+      const fallback = resolveFallbackColumns(cacheKey, tableName)
+      tableColumnCache.set(cacheKey, fallback)
+      return fallback
+    }
+    if (!data || !data.length) {
+      const fallback = resolveFallbackColumns(cacheKey, tableName)
+      tableColumnCache.set(cacheKey, fallback)
+      return fallback
+    }
+    const columns = new Set(Object.keys(data[0] as Record<string, unknown>))
+    tableColumnCache.set(cacheKey, columns)
+    return columns
+  } catch (error) {
+    console.error(`[comissao-actions] falha inesperada ao inspecionar ${tableName}`, error)
+    const fallback = resolveFallbackColumns(cacheKey, tableName)
+    tableColumnCache.set(cacheKey, fallback)
+    return fallback
+  }
+}
+
+function assignColumnIfExists(
+  columns: ColumnSet,
+  target: Record<string, unknown>,
+  column: string,
+  value: unknown,
+) {
+  if (columns && !columns.has(column)) return
+  target[column] = value
+}
+
+function assignFromAliases(
+  columns: ColumnSet,
+  target: Record<string, unknown>,
+  aliases: string[],
+  value: unknown,
+) {
+  const column = columns ? aliases.find((alias) => columns.has(alias)) ?? null : aliases[0] ?? null
+  if (!column) return
+  if (columns && !columns.has(column)) return
+  target[column] = value
+}
+
+function readValueFromAliases(row: Record<string, unknown>, aliases: string[]): string | null {
+  for (const alias of aliases) {
+    const value = row[alias]
+    if (typeof value === "string" && value.length) {
+      return value
+    }
+  }
+  return null
+}
+
 async function applyCandidateStatusFromOutraAprovacao(
   supabase: SupabaseServerClient,
   approval: OutraAprovacaoModerationRow,
@@ -374,13 +514,14 @@ export async function upsertCsjtAuthorizationAction(input: {
   }
 
   const now = new Date().toISOString()
-  const payload = {
-    data_autorizacao: dataAutorizacao.toISOString(),
-    total_provimentos: totalProvimentos,
-    observacao: input.observacao?.trim() || null,
-    loa_id: input.loaId || null,
-    updated_at: now,
-  }
+  const csjtColumns = await getTableColumns(supabase, "csjt_autorizacoes")
+  const dataAutorizacaoIso = dataAutorizacao.toISOString()
+  const payload: Record<string, unknown> = {}
+  assignColumnIfExists(csjtColumns, payload, "data_autorizacao", dataAutorizacaoIso)
+  assignColumnIfExists(csjtColumns, payload, "total_provimentos", totalProvimentos)
+  assignColumnIfExists(csjtColumns, payload, "observacao", input.observacao?.trim() || null)
+  assignColumnIfExists(csjtColumns, payload, "loa_id", input.loaId || null)
+  assignColumnIfExists(csjtColumns, payload, "updated_at", now)
 
   let authorizationId = input.id ?? null
 
@@ -401,9 +542,11 @@ export async function upsertCsjtAuthorizationAction(input: {
       throw new Error("Não foi possível atualizar os destinos dessa autorização.")
     }
   } else {
+    const insertPayload = { ...payload }
+    assignColumnIfExists(csjtColumns, insertPayload, "created_at", now)
     const { data, error } = await supabase
       .from("csjt_autorizacoes")
-      .insert({ ...payload, created_at: now })
+      .insert(insertPayload)
       .select("id")
       .single<{ id: string }>()
 
@@ -436,7 +579,7 @@ export async function upsertCsjtAuthorizationAction(input: {
   if (input.shouldNotify && authorizationId) {
     await enqueueResumoNotification(supabase, {
       titulo: `CSJT autorizou ${totalProvimentos} provimentos`,
-      corpo: `Distribuição confirmada em ${formatPtBr(payload.data_autorizacao)}.`,
+      corpo: `Distribuição confirmada em ${formatPtBr(dataAutorizacaoIso)}.`,
       tipo: "CSJT",
       metadata: { csjtAuthorizationId: authorizationId },
     })
@@ -471,14 +614,15 @@ export async function upsertCargosVagosAction(input: {
   }
 
   const now = new Date().toISOString()
-  const payload = {
-    data_referencia: dataReferencia.toISOString(),
-    analista_vagos: analistaVagos,
-    tecnico_vagos: tecnicoVagos,
-    observacao: input.observacao?.trim() || null,
-    fonte_url: input.fonteUrl?.trim() || null,
-    updated_at: now,
-  }
+  const cargosVagosColumns = await getTableColumns(supabase, "cargos_vagos_trt2")
+  const dataReferenciaIso = dataReferencia.toISOString()
+  const payload: Record<string, unknown> = {}
+  assignColumnIfExists(cargosVagosColumns, payload, "data_referencia", dataReferenciaIso)
+  assignColumnIfExists(cargosVagosColumns, payload, "analista_vagos", analistaVagos)
+  assignColumnIfExists(cargosVagosColumns, payload, "tecnico_vagos", tecnicoVagos)
+  assignColumnIfExists(cargosVagosColumns, payload, "observacao", input.observacao?.trim() || null)
+  assignColumnIfExists(cargosVagosColumns, payload, "fonte_url", input.fonteUrl?.trim() || null)
+  assignColumnIfExists(cargosVagosColumns, payload, "updated_at", now)
 
   let targetId = input.id ?? null
 
@@ -489,9 +633,11 @@ export async function upsertCargosVagosAction(input: {
       throw new Error("Não foi possível atualizar o registro de cargos vagos.")
     }
   } else {
+    const insertPayload = { ...payload }
+    assignColumnIfExists(cargosVagosColumns, insertPayload, "created_at", now)
     const { data, error } = await supabase
       .from("cargos_vagos_trt2")
-      .insert({ ...payload, created_at: now })
+      .insert(insertPayload)
       .select("id")
       .single<{ id: string }>()
 
@@ -506,7 +652,7 @@ export async function upsertCargosVagosAction(input: {
   if (input.shouldNotify && targetId) {
     await enqueueResumoNotification(supabase, {
       titulo: "Cargos vagos atualizados",
-      corpo: `${analistaVagos} AJ / ${tecnicoVagos} TJ na data ${formatPtBr(payload.data_referencia)}.`,
+      corpo: `${analistaVagos} AJ / ${tecnicoVagos} TJ na data ${formatPtBr(dataReferenciaIso)}.`,
       tipo: "CARGOS_VAGOS",
       metadata: { cargosVagosId: targetId },
     })
@@ -531,6 +677,9 @@ export async function registrarNomeacaoAction(input: {
 
   const supabase = await createSupabaseServerClient()
   const user = await assertComissaoUser()
+  const nomeacoesColumns = await getTableColumns(supabase, "nomeacoes")
+  const nomeacaoLinkColumns = await getTableColumns(supabase, "nomeacoes_candidatos")
+  const candidateColumns = await getTableColumns(supabase, "candidates")
 
   const dataNomeacao = new Date(input.dataNomeacao)
   if (Number.isNaN(dataNomeacao.getTime())) {
@@ -538,15 +687,19 @@ export async function registrarNomeacaoAction(input: {
   }
 
   const now = new Date().toISOString()
-  const nomeacaoPayload = {
-    data_nomeacao: dataNomeacao.toISOString(),
-    numero_ato: input.numeroAto?.trim() || null,
-    fonte_url: input.fonteUrl?.trim() || null,
-    observacao: input.observacao?.trim() || null,
-    tipo: "NOMEACAO",
-    updated_at: now,
-    created_by: user.id,
-  }
+  const dataNomeacaoIso = dataNomeacao.toISOString()
+  const numeroAto = input.numeroAto?.trim() || null
+  const fonteUrl = input.fonteUrl?.trim() || null
+  const observacao = input.observacao?.trim() || null
+
+  const nomeacaoPayload: Record<string, unknown> = {}
+  assignColumnIfExists(nomeacoesColumns, nomeacaoPayload, "data_nomeacao", dataNomeacaoIso)
+  assignColumnIfExists(nomeacoesColumns, nomeacaoPayload, "numero_ato", numeroAto)
+  assignColumnIfExists(nomeacoesColumns, nomeacaoPayload, "fonte_url", fonteUrl)
+  assignColumnIfExists(nomeacoesColumns, nomeacaoPayload, "observacao", observacao)
+  assignColumnIfExists(nomeacoesColumns, nomeacaoPayload, "tipo", "NOMEACAO")
+  assignColumnIfExists(nomeacoesColumns, nomeacaoPayload, "updated_at", now)
+  assignColumnIfExists(nomeacoesColumns, nomeacaoPayload, "created_by", user.id)
 
   let nomeacaoId = input.nomeacaoId ?? null
 
@@ -561,9 +714,11 @@ export async function registrarNomeacaoAction(input: {
       throw new Error("Não foi possível atualizar a nomeação informada.")
     }
   } else {
+    const insertPayload = { ...nomeacaoPayload }
+    assignColumnIfExists(nomeacoesColumns, insertPayload, "created_at", now)
     const { data, error } = await supabase
       .from("nomeacoes")
-      .insert({ ...nomeacaoPayload, created_at: now })
+      .insert(insertPayload)
       .select("id")
       .single<{ id: string }>()
 
@@ -575,29 +730,38 @@ export async function registrarNomeacaoAction(input: {
     nomeacaoId = data.id
   }
 
-  const { error: linkError } = await supabase.from("nomeacoes_candidatos").insert({
+  const linkPayload: Record<string, unknown> = {
     nomeacao_id: nomeacaoId,
     candidate_id: input.candidateId,
-    status: "PUBLICADA",
-    observacao: nomeacaoPayload.observacao,
-    created_at: now,
-    updated_at: now,
-  })
+  }
+  assignColumnIfExists(nomeacaoLinkColumns, linkPayload, "status", "PUBLICADA")
+  assignColumnIfExists(nomeacaoLinkColumns, linkPayload, "observacao", observacao)
+  assignColumnIfExists(nomeacaoLinkColumns, linkPayload, "created_at", now)
+  assignColumnIfExists(nomeacaoLinkColumns, linkPayload, "updated_at", now)
+
+  const { error: linkError } = await supabase.from("nomeacoes_candidatos").insert(linkPayload)
 
   if (linkError) {
     console.error("[registrarNomeacaoAction] erro ao vincular candidato", linkError)
     throw new Error("Não foi possível vincular o aprovado à nomeação.")
   }
 
-  const { error: candidateError } = await supabase
-    .from("candidates")
-    .update({ status_nomeacao: "NOMEADO", updated_at: now })
-    .eq("id", input.candidateId)
+  const candidateUpdate: Record<string, unknown> = {}
+  assignColumnIfExists(candidateColumns, candidateUpdate, "status_nomeacao", "NOMEADO")
+  assignColumnIfExists(candidateColumns, candidateUpdate, "updated_at", now)
 
-  if (candidateError) {
-    console.error("[registrarNomeacaoAction] erro ao atualizar candidato", candidateError)
-    throw new Error("Nomeação registrada, mas não conseguimos atualizar o candidato.")
+  if (Object.keys(candidateUpdate).length) {
+    const { error: candidateError } = await supabase
+      .from("candidates")
+      .update(candidateUpdate)
+      .eq("id", input.candidateId)
+
+    if (candidateError) {
+      console.error("[registrarNomeacaoAction] erro ao atualizar candidato", candidateError)
+      throw new Error("Nomeação registrada, mas não conseguimos atualizar o candidato.")
+    }
   }
+
 
   if (input.shouldNotify && nomeacaoId) {
     await enqueueResumoNotification(supabase, {
@@ -626,6 +790,8 @@ export async function createManualTdAction(input: {
 
   const supabase = await createSupabaseServerClient()
   const user = await assertComissaoUser()
+  const tdRequestColumns = await getTableColumns(supabase, "td_requests")
+  const candidateColumns = await getTableColumns(supabase, "candidates")
 
   const tipoNormalizado = input.tipoTd?.toUpperCase() as TdRequestTipo
   if (!TD_REQUEST_TIPOS.includes(tipoNormalizado)) {
@@ -652,18 +818,19 @@ export async function createManualTdAction(input: {
   const referenceIso = referenceDate.toISOString()
   const observacao = input.observacao?.trim() || null
 
-  const { error: insertError } = await supabase.from("td_requests").insert({
-    candidate_id: input.candidateId,
-    user_id: user.id,
-    tipo_td: tipoNormalizado,
-    observacao,
-    status: "APROVADO",
-    created_at: nowIso,
-    updated_at: nowIso,
-    approved_at: nowIso,
-    approved_by: user.id,
-    data_aprovacao: referenceIso,
-  })
+  const tdPayload: Record<string, unknown> = {}
+  assignColumnIfExists(tdRequestColumns, tdPayload, "candidate_id", input.candidateId)
+  assignColumnIfExists(tdRequestColumns, tdPayload, "user_id", user.id)
+  assignColumnIfExists(tdRequestColumns, tdPayload, "tipo_td", tipoNormalizado)
+  assignColumnIfExists(tdRequestColumns, tdPayload, "observacao", observacao)
+  assignColumnIfExists(tdRequestColumns, tdPayload, "status", "APROVADO")
+  assignColumnIfExists(tdRequestColumns, tdPayload, "created_at", nowIso)
+  assignColumnIfExists(tdRequestColumns, tdPayload, "updated_at", nowIso)
+  assignColumnIfExists(tdRequestColumns, tdPayload, "approved_at", nowIso)
+  assignColumnIfExists(tdRequestColumns, tdPayload, "approved_by", user.id)
+  assignColumnIfExists(tdRequestColumns, tdPayload, "data_aprovacao", referenceIso)
+
+  const { error: insertError } = await supabase.from("td_requests").insert(tdPayload)
 
   if (insertError) {
     console.error("[createManualTdAction] erro ao registrar TD manual", insertError)
@@ -673,14 +840,20 @@ export async function createManualTdAction(input: {
   const tdStatus = mapTipoTdToCandidateStatus(tipoNormalizado)
   if (tdStatus) {
     const defaultObs = observacao ?? `TD ${tipoNormalizado === "ENVIADO" ? "confirmado" : "em preparação"} (${formatPtBr(referenceIso)})`
-    const { error: candidateUpdateError } = await supabase
-      .from("candidates")
-      .update({ td_status: tdStatus, td_observacao: defaultObs })
-      .eq("id", input.candidateId)
+    const candidateUpdate: Record<string, unknown> = {}
+    assignColumnIfExists(candidateColumns, candidateUpdate, "td_status", tdStatus)
+    assignColumnIfExists(candidateColumns, candidateUpdate, "td_observacao", defaultObs)
 
-    if (candidateUpdateError) {
-      console.error("[createManualTdAction] erro ao atualizar candidato", candidateUpdateError)
-      throw new Error("TD registrado, mas não foi possível atualizar o candidato.")
+    if (Object.keys(candidateUpdate).length) {
+      const { error: candidateUpdateError } = await supabase
+        .from("candidates")
+        .update(candidateUpdate)
+        .eq("id", input.candidateId)
+
+      if (candidateUpdateError) {
+        console.error("[createManualTdAction] erro ao atualizar candidato", candidateUpdateError)
+        throw new Error("TD registrado, mas não foi possível atualizar o candidato.")
+      }
     }
   }
 
@@ -754,6 +927,7 @@ export async function upsertVacanciaAction(input: {
 }) {
   const supabase = await createSupabaseServerClient()
   await assertComissaoUser()
+  const vacanciaColumns = await getTableColumns(supabase, "vacancias")
 
   const dataValue = new Date(input.data)
   if (Number.isNaN(dataValue.getTime())) {
@@ -767,17 +941,27 @@ export async function upsertVacanciaAction(input: {
   }
 
   const now = new Date().toISOString()
-  const payload = {
-    data: dataValue.toISOString(),
-    tribunal,
-    cargo,
-    motivo: input.motivo?.trim() || null,
-    tipo: input.tipo?.trim() || null,
-    nome_servidor: input.nomeServidor?.trim() || null,
-    dou_link: input.douLink?.trim() || null,
-    observacao: input.observacao?.trim() || null,
-    updated_at: now,
-  }
+  const dataIso = dataValue.toISOString()
+  const payload: Record<string, unknown> = {}
+  assignFromAliases(vacanciaColumns, payload, VACANCIA_COLUMN_ALIASES.data, dataIso)
+  assignFromAliases(vacanciaColumns, payload, VACANCIA_COLUMN_ALIASES.tribunal, tribunal)
+  assignFromAliases(vacanciaColumns, payload, VACANCIA_COLUMN_ALIASES.cargo, cargo)
+  assignFromAliases(vacanciaColumns, payload, VACANCIA_COLUMN_ALIASES.motivo, input.motivo?.trim() || null)
+  assignFromAliases(vacanciaColumns, payload, VACANCIA_COLUMN_ALIASES.tipo, input.tipo?.trim() || null)
+  assignFromAliases(
+    vacanciaColumns,
+    payload,
+    VACANCIA_COLUMN_ALIASES.nomeServidor,
+    input.nomeServidor?.trim() || null,
+  )
+  assignFromAliases(vacanciaColumns, payload, VACANCIA_COLUMN_ALIASES.douLink, input.douLink?.trim() || null)
+  assignFromAliases(
+    vacanciaColumns,
+    payload,
+    VACANCIA_COLUMN_ALIASES.observacao,
+    input.observacao?.trim() || null,
+  )
+  assignColumnIfExists(vacanciaColumns, payload, "updated_at", now)
 
   let vacanciaId = input.id ?? null
 
@@ -788,9 +972,11 @@ export async function upsertVacanciaAction(input: {
       throw new Error("Não foi possível atualizar a vacância informada.")
     }
   } else {
+    const insertPayload = { ...payload }
+    assignColumnIfExists(vacanciaColumns, insertPayload, "created_at", now)
     const { data, error } = await supabase
       .from("vacancias")
-      .insert({ ...payload, created_at: now })
+      .insert(insertPayload)
       .select("id")
       .single<{ id: string }>()
 
@@ -804,7 +990,10 @@ export async function upsertVacanciaAction(input: {
 
   if (input.shouldNotify && vacanciaId) {
     const titulo = `Nova vacância (${cargo})`
-    const corpo = `${tribunal} registrou vacância em ${formatPtBr(payload.data)}.`
+    const dataValueForNotification =
+      readValueFromAliases(payload as Record<string, unknown>, VACANCIA_COLUMN_ALIASES.data) ??
+      dataIso
+    const corpo = `${tribunal} registrou vacância em ${formatPtBr(dataValueForNotification)}.`
     await enqueueResumoNotification(supabase, {
       titulo,
       corpo,
@@ -946,10 +1135,17 @@ export async function generateExportAction(input: { type: ExportManifest }) {
       { key: "td_observacao", label: "Obs. TD" },
     ]
   } else if (input.type === "vacancias") {
-    const { data, error } = await supabase
-      .from("vacancias")
-      .select("data, tribunal, cargo, motivo, tipo, nome_servidor, dou_link")
-      .order("data", { ascending: false })
+    const vacanciaColumns = await getTableColumns(supabase, "vacancias")
+    const orderColumn = vacanciaColumns
+      ? VACANCIA_COLUMN_ALIASES.data.find((alias) => vacanciaColumns.has(alias)) ?? undefined
+      : undefined
+
+    let query = supabase.from("vacancias").select("*")
+    if (orderColumn) {
+      query = query.order(orderColumn, { ascending: false })
+    }
+
+    const { data, error } = await query
 
     if (error || !data) {
       console.error("[generateExportAction] erro ao gerar CSV de vacâncias", error)
@@ -957,13 +1153,16 @@ export async function generateExportAction(input: { type: ExportManifest }) {
     }
 
     rows = data.map((row) => ({
-      data: row.data,
-      tribunal: row.tribunal,
-      cargo: row.cargo,
-      motivo: row.motivo,
-      tipo: row.tipo,
-      nome_servidor: row.nome_servidor,
-      dou_link: row.dou_link,
+      data: readValueFromAliases(row as Record<string, unknown>, VACANCIA_COLUMN_ALIASES.data),
+      tribunal: readValueFromAliases(row as Record<string, unknown>, VACANCIA_COLUMN_ALIASES.tribunal),
+      cargo: readValueFromAliases(row as Record<string, unknown>, VACANCIA_COLUMN_ALIASES.cargo),
+      motivo: readValueFromAliases(row as Record<string, unknown>, VACANCIA_COLUMN_ALIASES.motivo),
+      tipo: readValueFromAliases(row as Record<string, unknown>, VACANCIA_COLUMN_ALIASES.tipo),
+      nome_servidor: readValueFromAliases(
+        row as Record<string, unknown>,
+        VACANCIA_COLUMN_ALIASES.nomeServidor,
+      ),
+      dou_link: readValueFromAliases(row as Record<string, unknown>, VACANCIA_COLUMN_ALIASES.douLink),
     }))
 
     columns = [

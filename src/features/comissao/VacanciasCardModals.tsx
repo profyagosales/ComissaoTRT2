@@ -1,27 +1,17 @@
 "use client"
 
 import { useMemo, useState, useTransition } from "react"
-import type { FormEvent, ReactNode } from "react"
+import type { FormEvent } from "react"
 import { useRouter } from "next/navigation"
 
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogClose } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
+import { formatDateBrMedium } from "@/lib/date-format"
 import type { VacanciaRecord } from "./loadComissaoData"
-import { deleteVacanciaAction, upsertVacanciaAction } from "./comissao-actions"
+import type { ComissaoDashboardActions } from "./comissao-action-types"
+import { KanbanDialogBody, KanbanDialogContent, KanbanDialogFooter, KanbanDialogHeader } from "./KanbanDialog"
 
-const dialogContentClasses = "max-w-4xl bg-white text-zinc-900"
-
-function ActionButton({ children }: { children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      className="w-full rounded-full border border-red-200 bg-white/90 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-red-700 shadow-sm transition hover:border-red-300"
-    >
-      {children}
-    </button>
-  )
-}
 
 function MessageBanner({ state }: { state: { type: "success" | "error"; text: string } | null }) {
   if (!state) return null
@@ -46,20 +36,16 @@ const emptyForm = {
   shouldNotify: true,
 }
 
-type VacanciaFormProps = {
+type VacanciaFormFieldsProps = {
   form: typeof emptyForm
   onChange: (field: keyof typeof emptyForm, value: string | boolean | null) => void
-  onSubmit: (event: FormEvent) => void
   isPending: boolean
-  submitLabel: string
-  message: { type: "success" | "error"; text: string } | null
   onDelete?: () => void
-  disableSubmit?: boolean
 }
 
-function VacanciaForm({ form, onChange, onSubmit, isPending, submitLabel, message, onDelete, disableSubmit }: VacanciaFormProps) {
+function VacanciaFormFields({ form, onChange, isPending, onDelete }: VacanciaFormFieldsProps) {
   return (
-    <form onSubmit={onSubmit} className="space-y-4 text-sm">
+    <div className="space-y-4 text-sm">
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-1">
           <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Data</label>
@@ -119,10 +105,8 @@ function VacanciaForm({ form, onChange, onSubmit, isPending, submitLabel, messag
         Notificar aprovados sobre a atualização
       </label>
 
-      <MessageBanner state={message} />
-
-      <div className="flex items-center justify-between">
-        {onDelete ? (
+      {onDelete ? (
+        <div className="pt-2">
           <button
             type="button"
             onClick={onDelete}
@@ -131,27 +115,22 @@ function VacanciaForm({ form, onChange, onSubmit, isPending, submitLabel, messag
           >
             Remover registro
           </button>
-        ) : <span />}
-        <button
-          type="submit"
-            disabled={isPending || disableSubmit}
-          className="rounded-full bg-red-600 px-6 py-2 text-sm font-semibold text-white shadow hover:bg-red-500 disabled:bg-red-300"
-        >
-          {isPending ? "Salvando..." : submitLabel}
-        </button>
-      </div>
-    </form>
+        </div>
+      ) : null}
+    </div>
   )
 }
 
 type NovaVacanciaModalProps = {
-  triggerLabel?: string
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onUpsertVacancia: ComissaoDashboardActions["upsertVacancia"]
 }
 
-function NovaVacanciaModal({ triggerLabel = "Nova vacância" }: NovaVacanciaModalProps) {
+export function NovaVacanciaModal({ open, onOpenChange, onUpsertVacancia }: NovaVacanciaModalProps) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
-  const [form, setForm] = useState({ ...emptyForm })
+  const buildForm = () => ({ ...emptyForm })
+  const [form, setForm] = useState(buildForm)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -175,7 +154,7 @@ function NovaVacanciaModal({ triggerLabel = "Nova vacância" }: NovaVacanciaModa
 
     startTransition(async () => {
       try {
-        await upsertVacanciaAction({
+        await onUpsertVacancia({
           data: form.data,
           tribunal: form.tribunal.trim() || "TRT-2",
           cargo: form.cargo.trim(),
@@ -187,8 +166,9 @@ function NovaVacanciaModal({ triggerLabel = "Nova vacância" }: NovaVacanciaModa
           shouldNotify: form.shouldNotify,
         })
         setMessage({ type: "success", text: "Vacância registrada." })
-        setForm({ ...emptyForm })
+        setForm(buildForm())
         router.refresh()
+        onOpenChange(false)
       } catch (error) {
         const text = error instanceof Error ? error.message : "Erro ao salvar vacância."
         setMessage({ type: "error", text })
@@ -196,39 +176,63 @@ function NovaVacanciaModal({ triggerLabel = "Nova vacância" }: NovaVacanciaModa
     })
   }
 
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <ActionButton>{triggerLabel}</ActionButton>
-      </DialogTrigger>
-      <DialogContent className={cn(dialogContentClasses, "space-y-6")}>
-        <DialogHeader>
-          <DialogTitle className="text-2xl font-semibold text-zinc-900">Registrar vacância</DialogTitle>
-          <DialogDescription className="text-sm text-zinc-500">
-            Cadastre saídas de servidores e mantenha o impacto atualizado para o painel.
-          </DialogDescription>
-        </DialogHeader>
+  const handleDialogChange = (nextOpen: boolean) => {
+    onOpenChange(nextOpen)
+    if (!nextOpen) {
+      setMessage(null)
+      setForm(buildForm())
+    }
+  }
 
-        <VacanciaForm
-          form={form}
-          onChange={updateForm}
-          onSubmit={handleSubmit}
-          isPending={isPending}
-          submitLabel="Salvar vacância"
-          message={message}
-        />
-      </DialogContent>
+  return (
+    <Dialog open={open} onOpenChange={handleDialogChange}>
+      <KanbanDialogContent size="large">
+        <form onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col">
+          <KanbanDialogHeader
+            title="Registrar vacância"
+            description="Cadastre saídas de servidores e mantenha o impacto atualizado para o painel."
+          />
+
+          <KanbanDialogBody>
+            <VacanciaFormFields form={form} onChange={updateForm} isPending={isPending} />
+            <div className="pt-4">
+              <MessageBanner state={message} />
+            </div>
+          </KanbanDialogBody>
+
+          <KanbanDialogFooter>
+            <DialogClose asChild>
+              <button
+                type="button"
+                className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 transition hover:border-zinc-300"
+              >
+                Cancelar
+              </button>
+            </DialogClose>
+            <button
+              type="submit"
+              disabled={isPending}
+              className="rounded-full bg-red-600 px-6 py-2 text-sm font-semibold text-white shadow hover:bg-red-500 disabled:bg-red-300"
+            >
+              {isPending ? "Salvando..." : "Salvar vacância"}
+            </button>
+          </KanbanDialogFooter>
+        </form>
+      </KanbanDialogContent>
     </Dialog>
   )
 }
 
 type VacanciasHistoryModalProps = {
+  open: boolean
+  onOpenChange: (open: boolean) => void
   vacancias: VacanciaRecord[]
+  onUpsertVacancia: ComissaoDashboardActions["upsertVacancia"]
+  onDeleteVacancia: ComissaoDashboardActions["deleteVacancia"]
 }
 
-function VacanciasHistoryModal({ vacancias }: VacanciasHistoryModalProps) {
+export function VacanciasHistoryModal({ open, onOpenChange, vacancias, onUpsertVacancia, onDeleteVacancia }: VacanciasHistoryModalProps) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ ...emptyForm })
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [isPending, startTransition] = useTransition()
@@ -278,7 +282,7 @@ function VacanciasHistoryModal({ vacancias }: VacanciasHistoryModalProps) {
 
     startTransition(async () => {
       try {
-        await upsertVacanciaAction({
+        await onUpsertVacancia({
           id: recordId,
           data: form.data,
           tribunal: form.tribunal,
@@ -304,7 +308,7 @@ function VacanciasHistoryModal({ vacancias }: VacanciasHistoryModalProps) {
     if (!recordId) return
     startTransition(async () => {
       try {
-        await deleteVacanciaAction({ id: recordId })
+        await onDeleteVacancia({ id: recordId })
         setMessage({ type: "success", text: "Registro removido." })
         setForm({ ...emptyForm })
         router.refresh()
@@ -315,64 +319,80 @@ function VacanciasHistoryModal({ vacancias }: VacanciasHistoryModalProps) {
     })
   }
 
+  const handleDialogChange = (nextOpen: boolean) => {
+    onOpenChange(nextOpen)
+    if (!nextOpen) {
+      setMessage(null)
+    }
+  }
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <ActionButton>Histórico</ActionButton>
-      </DialogTrigger>
-      <DialogContent className={cn(dialogContentClasses, "space-y-6")}> 
-        <DialogHeader>
-          <DialogTitle className="text-2xl font-semibold text-zinc-900">Histórico de vacâncias</DialogTitle>
-          <DialogDescription className="text-sm text-zinc-500">
-            Consulte os registros existentes, selecione um item para editar ou remover.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
-            {sorted.length === 0 ? (
-              <p className="text-sm text-zinc-500">Nenhuma vacância registrada.</p>
-            ) : (
-              sorted.map((record) => (
-                <button
-                  key={record.id}
-                  type="button"
-                  onClick={() => selectVacancia(record)}
-                  className={cn(
-                    "w-full rounded-2xl border px-4 py-3 text-left text-sm transition",
-                    form.id === record.id ? "border-red-200 bg-red-50/60" : "border-zinc-100 bg-zinc-50/70 hover:border-zinc-200"
-                  )}
-                >
-                  <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">{record.tribunal ?? "TRT-2"}</p>
-                  <p className="text-base font-semibold text-zinc-900">{record.cargo ?? "Cargo"}</p>
-                  <p className="text-xs text-zinc-500">{record.motivo ?? "—"}</p>
-                  <p className="text-[11px] text-zinc-400">{record.data ? new Date(record.data).toLocaleDateString("pt-BR") : "Sem data"}</p>
-                </button>
-              ))
-            )}
-          </div>
-
-          <VacanciaForm
-            form={form}
-            onChange={updateForm}
-            onSubmit={handleSubmit}
-            isPending={isPending}
-            submitLabel={form.id ? "Salvar alterações" : "Selecione um registro"}
-            message={message}
-            onDelete={form.id ? handleDelete : undefined}
-            disableSubmit={!form.id}
+    <Dialog open={open} onOpenChange={handleDialogChange}>
+      <KanbanDialogContent size="wide">
+        <form onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col">
+          <KanbanDialogHeader
+            title="Histórico de vacâncias"
+            description="Consulte os registros existentes, selecione um item para editar ou remover."
           />
-        </div>
-      </DialogContent>
-    </Dialog>
-  )
-}
 
-export function VacanciasCardActions({ vacancias }: { vacancias: VacanciaRecord[] }) {
-  return (
-    <div className="grid gap-2 md:grid-cols-2">
-      <NovaVacanciaModal />
-      <VacanciasHistoryModal vacancias={vacancias} />
-    </div>
+          <KanbanDialogBody>
+            <div className="grid gap-6 lg:grid-cols-2">
+              <div className="max-h-[60vh] space-y-2 overflow-y-auto pr-1">
+                {sorted.length === 0 ? (
+                  <p className="text-sm text-zinc-500">Nenhuma vacância registrada.</p>
+                ) : (
+                  sorted.map((record) => (
+                    <button
+                      key={record.id}
+                      type="button"
+                      onClick={() => selectVacancia(record)}
+                      className={cn(
+                        "w-full rounded-2xl border px-4 py-3 text-left text-sm transition",
+                        form.id === record.id ? "border-red-200 bg-red-50/60" : "border-zinc-100 bg-zinc-50/70 hover:border-zinc-200"
+                      )}
+                    >
+                      <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">{record.tribunal ?? "TRT-2"}</p>
+                      <p className="text-base font-semibold text-zinc-900">{record.cargo ?? "Cargo"}</p>
+                      <p className="text-xs text-zinc-500">{record.motivo ?? "—"}</p>
+                      <p className="text-[11px] text-zinc-400">{record.data ? formatDateBrMedium(record.data) : "Sem data"}</p>
+                    </button>
+                  ))
+                )}
+              </div>
+
+              <div>
+                <VacanciaFormFields
+                  form={form}
+                  onChange={updateForm}
+                  isPending={isPending}
+                  onDelete={form.id ? handleDelete : undefined}
+                />
+                <div className="pt-4">
+                  <MessageBanner state={message} />
+                </div>
+              </div>
+            </div>
+          </KanbanDialogBody>
+
+          <KanbanDialogFooter>
+            <DialogClose asChild>
+              <button
+                type="button"
+                className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 transition hover:border-zinc-300"
+              >
+                Cancelar
+              </button>
+            </DialogClose>
+            <button
+              type="submit"
+              disabled={isPending || !form.id}
+              className="rounded-full bg-red-600 px-6 py-2 text-sm font-semibold text-white shadow hover:bg-red-500 disabled:bg-red-300"
+            >
+              {isPending ? "Salvando..." : form.id ? "Salvar alterações" : "Selecione um registro"}
+            </button>
+          </KanbanDialogFooter>
+        </form>
+      </KanbanDialogContent>
+    </Dialog>
   )
 }

@@ -192,9 +192,9 @@ export async function createCandidateAction(input: CreateCandidateInput) {
     nome,
     sistema_concorrencia: mapSistemaToDatabaseValue(sistema_concorrencia),
     classificacao_lista,
-    ordem_nomeacao_base: null,
+    ordem_nomeacao_base: classificacao_lista,
     id_unico,
-    status_nomeacao: null,
+    status_nomeacao: 'AGUARDANDO',
     td_status: null,
     td_observacao: null,
   })

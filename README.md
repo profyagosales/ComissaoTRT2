@@ -54,6 +54,42 @@ O projeto já conta com um fluxo completo de autenticação integrado ao Supabas
 	- Protegido por layout autenticado.
 	- Carrega os dados do usuário logado a partir de `user_profiles` + `candidates`.
 
+## Acesso direto ao banco (Supabase)
+
+Além dos clients oficiais do Supabase, o projeto expõe uma camada simples de acesso SQL para rotinas administrativas.
+
+### Arquitetura
+
+- `db.js`: instancia o cliente `postgres` apontando para o pool de conexões do Supabase (`DATABASE_URL`). Inclui limites de pool, SSL obrigatório e validação das variáveis de ambiente.
+- `scripts/test-db.js`: script utilitário que reaproveita `db.js`, executa `select now()` e um resumo de candidatos por lista.
+
+### Pré-requisitos
+
+Crie (ou atualize) o arquivo `.env.local` na raiz com os segredos emitidos pelo Supabase. Os campos mínimos para os scripts SQL são:
+
+```
+SUPABASE_URL=...
+SUPABASE_SERVICE_ROLE_KEY=...
+SUPABASE_ANON_KEY=...
+DATABASE_URL=postgresql://<usuario_pool>:<senha>@<host>:<porta>/<database>?sslmode=require
+```
+
+> O `DATABASE_URL` deve usar o **Pooling → Transactional** do Supabase, que libera o usuário específico do pool.
+
+### Como testar a conexão
+
+1. Exporte as variáveis para o shell atual (o `set -a` evita digitar cada `export`):
+	```bash
+	set -a && source .env.local && set +a
+	```
+2. Execute o script de verificação:
+	```bash
+	node scripts/test-db.js
+	```
+3. A saída esperada confirma a conexão (`✅ Conectado! now() = ...`) e lista os totais por `sistema_concorrencia`.
+
+Esse mesmo módulo (`db.js`) pode ser reutilizado em outros scripts de manutenção ou migrações, mantendo um único lugar para configurar pool/SSL.
+
 ### Estrutura no Supabase
 
 #### Tabelas principais

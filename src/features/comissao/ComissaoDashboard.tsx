@@ -1,15 +1,17 @@
 "use client"
 
-import { useMemo, type ReactNode } from "react"
+import { useMemo, useState, type ReactNode } from "react"
 import { ClipboardList, FileSignature, ListChecks, Megaphone, Settings2 } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ResumoCardActions } from "./ResumoCardModals"
-import { ListasCardActions } from "./ListasCardModals"
-import { TdCardActions } from "./TdCardModals"
-import { VacanciasCardActions } from "./VacanciasCardModals"
-import { ControleCardActions } from "./ControleCardModals"
+import { formatDateBrMedium } from "@/lib/date-format"
+import { LoaModal, CsjtModal, CargosVagosModal } from "./ResumoCardModals"
+import { PendenciasModal, NovoCandidatoModal, NomeacaoModal, NovaAprovacaoModal } from "./ListasCardModals"
+import { TdPendenciasModal, TdContentEditorModal, TdManualModal } from "./TdCardModals"
+import { NovaVacanciaModal, VacanciasHistoryModal } from "./VacanciasCardModals"
+import { NotificationQueueModal, ReportsModal } from "./ControleCardModals"
 import type { ComissaoDashboardData } from "./loadComissaoData"
+import type { ComissaoDashboardActions } from "./comissao-action-types"
 
 type DashboardCardProps = {
   title: string
@@ -33,16 +35,30 @@ function DashboardCard({ title, description, children, icon }: DashboardCardProp
   )
 }
 
-function formatDate(value?: string | null) {
-  if (!value) return "—"
-  try {
-    return new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium" }).format(new Date(value))
-  } catch {
-    return "—"
-  }
+type ActionVariant = "red" | "amber"
+
+function CardActionButton({ children, onClick, variant = "red" }: { children: ReactNode; onClick: () => void; variant?: ActionVariant }) {
+  const palette = variant === "amber"
+    ? "border-amber-200 text-amber-700 hover:border-amber-300"
+    : "border-red-200 text-red-700 hover:border-red-300"
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full rounded-full border bg-white/90 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] shadow-sm transition ${palette}`}
+    >
+      {children}
+    </button>
+  )
 }
 
-export function ComissaoDashboard({ data }: { data: ComissaoDashboardData }) {
+type ComissaoDashboardProps = {
+  data: ComissaoDashboardData
+  actions: ComissaoDashboardActions
+}
+
+export function ComissaoDashboard({ data, actions }: ComissaoDashboardProps) {
   const {
     pendingOutrasAprovacoesCount,
     pendingTdCount,
@@ -60,9 +76,29 @@ export function ComissaoDashboard({ data }: { data: ComissaoDashboardData }) {
     notificationsQueue,
   } = data
 
+  const [openLoa, setOpenLoa] = useState(false)
+  const [openCsjt, setOpenCsjt] = useState(false)
+  const [openCargosVagos, setOpenCargosVagos] = useState(false)
+
+  const [openPendenciasListas, setOpenPendenciasListas] = useState(false)
+  const [openAdicionarAprovado, setOpenAdicionarAprovado] = useState(false)
+  const [openNomeacoes, setOpenNomeacoes] = useState(false)
+  const [openAprovacaoManual, setOpenAprovacaoManual] = useState(false)
+
+  const [openPendenciasTds, setOpenPendenciasTds] = useState(false)
+  const [openEditarTdConteudo, setOpenEditarTdConteudo] = useState(false)
+  const [openCadastroTdManual, setOpenCadastroTdManual] = useState(false)
+
+  const [openNovaVacancia, setOpenNovaVacancia] = useState(false)
+  const [openHistoricoVacancias, setOpenHistoricoVacancias] = useState(false)
+
+  const [openFilaNotificacoes, setOpenFilaNotificacoes] = useState(false)
+  const [openRelatorios, setOpenRelatorios] = useState(false)
+
   const outrasPreview = outrasAprovacoes.slice(0, 3)
   const tdPreview = tdRequests.slice(0, 3)
   const vacanciasPreview = vacanciasHistory.slice(0, 3)
+
   const notificationsSummary = useMemo(() => {
     const summary = { pendentes: 0, falhas: 0, enviadas: 0 }
     notificationsQueue.forEach((item) => {
@@ -72,7 +108,9 @@ export function ComissaoDashboard({ data }: { data: ComissaoDashboardData }) {
     })
     return summary
   }, [notificationsQueue])
+
   const destaqueControle = notificationsQueue[0]
+
   const resumoHighlights = [
     {
       label: "LOA",
@@ -82,14 +120,14 @@ export function ComissaoDashboard({ data }: { data: ComissaoDashboardData }) {
     {
       label: "CSJT",
       value: latestCsjtAuthorization ? `${latestCsjtAuthorization.totalProvimentos} vagas` : "Sem autorizações",
-      helper: latestCsjtAuthorization ? `Autorizado em ${formatDate(latestCsjtAuthorization.dataAutorizacao)}` : "Inclua a última deliberação",
+      helper: latestCsjtAuthorization ? `Autorizado em ${formatDateBrMedium(latestCsjtAuthorization.dataAutorizacao)}` : "Inclua a última deliberação",
     },
     {
       label: "Cargos vagos",
       value: latestCargosVagos
         ? `${latestCargosVagos.analistaVagos} AJ · ${latestCargosVagos.tecnicoVagos} TJ`
         : "Sem dados",
-      helper: latestCargosVagos ? `Referência ${formatDate(latestCargosVagos.dataReferencia)}` : "Registre o levantamento mais recente",
+      helper: latestCargosVagos ? `Referência ${formatDateBrMedium(latestCargosVagos.dataReferencia)}` : "Registre o levantamento mais recente",
     },
   ]
 
@@ -110,11 +148,11 @@ export function ComissaoDashboard({ data }: { data: ComissaoDashboardData }) {
               </div>
             ))}
           </div>
-          <ResumoCardActions
-            loas={loasHistory}
-            csjtAuthorizations={csjtAuthorizationsHistory}
-            cargosVagos={cargosVagosHistory}
-          />
+          <div className="grid gap-2 md:grid-cols-3">
+            <CardActionButton onClick={() => setOpenLoa(true)}>LOA</CardActionButton>
+            <CardActionButton onClick={() => setOpenCsjt(true)}>CSJT</CardActionButton>
+            <CardActionButton onClick={() => setOpenCargosVagos(true)}>CARGOS VAGOS</CardActionButton>
+          </div>
         </>
       ),
     },
@@ -144,7 +182,12 @@ export function ComissaoDashboard({ data }: { data: ComissaoDashboardData }) {
               <p className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50 px-3 py-4 text-sm text-zinc-500">Nenhum envio recente.</p>
             )}
           </div>
-          <ListasCardActions pending={outrasAprovacoes} candidates={candidates} />
+          <div className="grid gap-2 md:grid-cols-2">
+            <CardActionButton onClick={() => setOpenPendenciasListas(true)}>PENDÊNCIAS</CardActionButton>
+            <CardActionButton onClick={() => setOpenAdicionarAprovado(true)}>ADICIONAR APROVADO</CardActionButton>
+            <CardActionButton onClick={() => setOpenNomeacoes(true)}>NOMEAÇÕES</CardActionButton>
+            <CardActionButton onClick={() => setOpenAprovacaoManual(true)}>APROVAÇÃO MANUAL</CardActionButton>
+          </div>
         </>
       ),
     },
@@ -171,7 +214,11 @@ export function ComissaoDashboard({ data }: { data: ComissaoDashboardData }) {
               <p className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50 px-3 py-4 text-sm text-zinc-500">Nenhuma solicitação aguardando revisão.</p>
             )}
           </div>
-          <TdCardActions pending={tdRequests} candidates={candidates} content={tdContent} />
+          <div className="grid gap-2">
+            <CardActionButton variant="amber" onClick={() => setOpenPendenciasTds(true)}>PENDÊNCIAS</CardActionButton>
+            <CardActionButton variant="amber" onClick={() => setOpenEditarTdConteudo(true)}>EDITAR CONTEÚDO</CardActionButton>
+            <CardActionButton variant="amber" onClick={() => setOpenCadastroTdManual(true)}>CADASTRO MANUAL</CardActionButton>
+          </div>
         </>
       ),
     },
@@ -189,14 +236,17 @@ export function ComissaoDashboard({ data }: { data: ComissaoDashboardData }) {
                   <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">{item.tribunal ?? "TRT-2"}</p>
                   <p className="text-base font-semibold text-zinc-900">{item.cargo ?? "Cargo"}</p>
                   <p className="text-xs text-zinc-500">{item.motivo ?? "Sem motivo"}</p>
-                  <p className="text-[11px] text-zinc-400">{formatDate(item.data)}</p>
+                  <p className="text-[11px] text-zinc-400">{formatDateBrMedium(item.data)}</p>
                 </div>
               ))
             ) : (
               <p className="rounded-2xl border border-dashed border-zinc-200 bg-white/80 px-3 py-4 text-sm text-zinc-500">Nenhuma vacância registrada até o momento.</p>
             )}
           </div>
-          <VacanciasCardActions vacancias={vacanciasHistory} />
+          <div className="grid gap-2 md:grid-cols-2">
+            <CardActionButton onClick={() => setOpenNovaVacancia(true)}>NOVA VACÂNCIA</CardActionButton>
+            <CardActionButton onClick={() => setOpenHistoricoVacancias(true)}>HISTÓRICO</CardActionButton>
+          </div>
         </>
       ),
     },
@@ -223,68 +273,101 @@ export function ComissaoDashboard({ data }: { data: ComissaoDashboardData }) {
               <p className="mt-3 text-xs text-zinc-500">Fila vazia no momento.</p>
             )}
           </div>
-          <ControleCardActions queue={notificationsQueue} />
+          <div className="grid gap-2 md:grid-cols-2">
+            <CardActionButton onClick={() => setOpenFilaNotificacoes(true)}>FILA DE NOTIFICAÇÕES</CardActionButton>
+            <CardActionButton onClick={() => setOpenRelatorios(true)}>RELATÓRIOS</CardActionButton>
+          </div>
         </>
       ),
     },
   ]
 
   return (
-    <div className="space-y-10">
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="border-none bg-gradient-to-br from-red-900 via-red-700 to-red-600 text-white">
-          <CardContent className="flex flex-col gap-4 p-6">
-            <div>
-              <p className="text-xs uppercase tracking-[0.35em] text-red-100">Pendências totais</p>
-              <h2 className="text-4xl font-semibold">{pendingOutrasAprovacoesCount + pendingTdCount}</h2>
-              <p className="text-sm text-red-100">Itens aguardando despacho da comissão.</p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl bg-white/10 p-3">
-                <p className="text-xs uppercase tracking-[0.3em] text-red-100">Outras aprovações</p>
-                <p className="text-2xl font-semibold">{pendingOutrasAprovacoesCount}</p>
-              </div>
-              <div className="rounded-2xl bg-white/10 p-3">
-                <p className="text-xs uppercase tracking-[0.3em] text-red-100">TDs</p>
-                <p className="text-2xl font-semibold">{pendingTdCount}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-none bg-white/90 shadow-lg shadow-zinc-200/60">
-          <CardContent className="flex h-full flex-col justify-between gap-4 p-6">
-            <div>
-              <p className="text-xs uppercase tracking-[0.35em] text-zinc-400">Últimas atualizações</p>
-              <p className="mt-2 text-lg font-semibold text-zinc-900">{latestLoa ? `LOA ${latestLoa.ano}` : "Sem LOA cadastrada"}</p>
-              <p className="text-sm text-zinc-500">
-                {latestLoa ? `Status: ${latestLoa.status}` : "Cadastre a primeira LOA para iniciar o acompanhamento."}
-              </p>
-            </div>
-            <div className="text-xs text-zinc-500 space-y-1">
-              <p>
-                CSJT: {latestCsjtAuthorization ? `${latestCsjtAuthorization.totalProvimentos} vagas autorizadas em ${formatDate(latestCsjtAuthorization.dataAutorizacao)}` : "Nenhuma autorização registrada"}
-              </p>
-              <p>Cargos vagos TRT-2: {latestCargosVagos ? `${latestCargosVagos.analistaVagos} AJ / ${latestCargosVagos.tecnicoVagos} TJ` : "Sem dados"}</p>
-            </div>
-          </CardContent>
-        </Card>
+    <>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+        {boardColumns.map((column) => (
+          <DashboardCard key={column.key} title={column.title} description={column.description} icon={column.icon}>
+            {column.content}
+          </DashboardCard>
+        ))}
       </div>
 
-      <div className="space-y-3">
-        <div>
-          <p className="text-xs uppercase tracking-[0.35em] text-zinc-400">Fluxo operacional</p>
-          <h2 className="text-2xl font-semibold text-zinc-900">Kanban da Comissão</h2>
-          <p className="text-sm text-zinc-500">Os cinco cards agora contam com formulários e modais prontos para conduzir toda a operação da comissão.</p>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
-          {boardColumns.map((column) => (
-            <DashboardCard key={column.key} title={column.title} description={column.description} icon={column.icon}>
-              {column.content}
-            </DashboardCard>
-          ))}
-        </div>
-      </div>
-    </div>
+      <LoaModal open={openLoa} onOpenChange={setOpenLoa} loas={loasHistory} onUpsertLoa={actions.upsertLoa} />
+      <CsjtModal
+        open={openCsjt}
+        onOpenChange={setOpenCsjt}
+        autorizacoes={csjtAuthorizationsHistory}
+        loas={loasHistory}
+        onUpsertCsjtAuthorization={actions.upsertCsjtAuthorization}
+      />
+      <CargosVagosModal
+        open={openCargosVagos}
+        onOpenChange={setOpenCargosVagos}
+        registros={cargosVagosHistory}
+        onUpsertCargosVagos={actions.upsertCargosVagos}
+      />
+
+      <PendenciasModal
+        open={openPendenciasListas}
+        onOpenChange={setOpenPendenciasListas}
+        pending={outrasAprovacoes}
+        onModerateOutraAprovacao={actions.moderateOutraAprovacao}
+      />
+      <NovoCandidatoModal
+        open={openAdicionarAprovado}
+        onOpenChange={setOpenAdicionarAprovado}
+        onCreateCandidate={actions.createCandidate}
+      />
+      <NomeacaoModal
+        open={openNomeacoes}
+        onOpenChange={setOpenNomeacoes}
+        candidates={candidates}
+        onRegistrarNomeacao={actions.registrarNomeacao}
+      />
+      <NovaAprovacaoModal
+        open={openAprovacaoManual}
+        onOpenChange={setOpenAprovacaoManual}
+        candidates={candidates}
+        onSaveOutraAprovacao={actions.saveOutraAprovacao}
+      />
+
+      <TdPendenciasModal
+        open={openPendenciasTds}
+        onOpenChange={setOpenPendenciasTds}
+        pending={tdRequests}
+        onModerateTdRequest={actions.moderateTdRequest}
+      />
+      <TdContentEditorModal
+        open={openEditarTdConteudo}
+        onOpenChange={setOpenEditarTdConteudo}
+        content={tdContent}
+        onUpsertTdContent={actions.upsertTdContent}
+      />
+      <TdManualModal
+        open={openCadastroTdManual}
+        onOpenChange={setOpenCadastroTdManual}
+        candidates={candidates}
+        onCreateManualTd={actions.createManualTd}
+      />
+
+      <NovaVacanciaModal open={openNovaVacancia} onOpenChange={setOpenNovaVacancia} onUpsertVacancia={actions.upsertVacancia} />
+      <VacanciasHistoryModal
+        open={openHistoricoVacancias}
+        onOpenChange={setOpenHistoricoVacancias}
+        vacancias={vacanciasHistory}
+        onUpsertVacancia={actions.upsertVacancia}
+        onDeleteVacancia={actions.deleteVacancia}
+      />
+
+      <NotificationQueueModal
+        open={openFilaNotificacoes}
+        onOpenChange={setOpenFilaNotificacoes}
+        queue={notificationsQueue}
+        onRetryNotification={actions.retryNotification}
+        onCancelNotification={actions.cancelNotification}
+        onEnqueueNotification={actions.enqueueCustomNotification}
+      />
+      <ReportsModal open={openRelatorios} onOpenChange={setOpenRelatorios} onGenerateExport={actions.generateExport} />
+    </>
   )
 }

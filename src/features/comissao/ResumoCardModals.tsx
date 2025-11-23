@@ -4,34 +4,18 @@ import { useState, useTransition } from "react"
 import type { ReactNode } from "react"
 import { useRouter } from "next/navigation"
 
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogClose } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
-
-import {
-  upsertCargosVagosAction,
-  upsertCsjtAuthorizationAction,
-  upsertLoaAction,
-} from "./comissao-actions"
+import { KanbanDialogBody, KanbanDialogContent, KanbanDialogFooter, KanbanDialogHeader } from "./KanbanDialog"
 import type {
   CargosVagosRecord,
   CsjtAuthorizationRecord,
   LoaHistoryRecord,
 } from "./loadComissaoData"
+import type { ComissaoDashboardActions } from "./comissao-action-types"
 
-const dialogContentClasses = "max-w-5xl bg-white text-zinc-900"
 const sectionTitleClasses = "text-xs font-semibold tracking-[0.2em] uppercase text-zinc-400"
-
-function ActionTriggerButton({ children }: { children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      className="w-full rounded-full border border-red-200 bg-white/90 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-red-700 shadow-sm transition hover:border-red-300"
-    >
-      {children}
-    </button>
-  )
-}
 
 type MessageState = { type: "error" | "success"; text: string } | null
 
@@ -174,13 +158,14 @@ function HistoryList<T extends { id: string }>(
 }
 
 type LoaModalProps = {
-  trigger?: ReactNode
+  open: boolean
+  onOpenChange: (open: boolean) => void
   loas: LoaHistoryRecord[]
+  onUpsertLoa: ComissaoDashboardActions["upsertLoa"]
 }
 
-export function LoaModal({ trigger, loas }: LoaModalProps) {
+export function LoaModal({ open, onOpenChange, loas, onUpsertLoa }: LoaModalProps) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(loas[0]?.id ?? null)
   const [message, setMessage] = useState<MessageState>(null)
   const [isPending, startTransition] = useTransition()
@@ -199,7 +184,7 @@ export function LoaModal({ trigger, loas }: LoaModalProps) {
   }
 
   const handleDialogChange = (nextOpen: boolean) => {
-    setOpen(nextOpen)
+    onOpenChange(nextOpen)
     if (nextOpen) {
       selectLoa(loas[0]?.id ?? null)
       setMessage(null)
@@ -229,7 +214,7 @@ export function LoaModal({ trigger, loas }: LoaModalProps) {
 
     startTransition(async () => {
       try {
-        await upsertLoaAction({
+        await onUpsertLoa({
           id: form.id,
           ano: anoNumber,
           totalPrevisto: totalNumber,
@@ -240,6 +225,7 @@ export function LoaModal({ trigger, loas }: LoaModalProps) {
         setMessage({ type: "success", text: "LOA salva com sucesso." })
         setForm(prev => ({ ...prev, shouldNotify: false }))
         router.refresh()
+        onOpenChange(false)
       } catch (error) {
         const message = error instanceof Error ? error.message : "Erro ao salvar LOA."
         setMessage({ type: "error", text: message })
@@ -247,120 +233,128 @@ export function LoaModal({ trigger, loas }: LoaModalProps) {
     })
   }
 
-  const triggerElement = trigger ?? <ActionTriggerButton>LOA</ActionTriggerButton>
-
   return (
     <Dialog open={open} onOpenChange={handleDialogChange}>
-      <DialogTrigger asChild>{triggerElement}</DialogTrigger>
-      <DialogContent className={cn(dialogContentClasses, "space-y-6")}>
-        <DialogHeader>
-          <DialogTitle className="text-2xl font-semibold text-zinc-900">LOA e previsão de provimentos</DialogTitle>
-          <DialogDescription className="text-sm text-zinc-500">
-            Consulte o histórico recente e cadastre novas projeções de LOA.
-          </DialogDescription>
-        </DialogHeader>
+      <KanbanDialogContent size="wide">
+        <form onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col">
+          <KanbanDialogHeader
+            title="LOA e previsão de provimentos"
+            description="Consulte o histórico recente e cadastre novas projeções de LOA."
+          />
 
-        <div className="flex flex-col gap-6 md:flex-row">
-          <div className="md:w-5/12">
-            <HistoryList
-              title="Últimas LOAs"
-              emptyLabel="Nenhum registro encontrado."
-              items={loas}
-              selectedId={selectedId}
-              onSelect={(id) => selectLoa(id)}
-              onCreateNew={() => selectLoa(null)}
-              renderItem={(item) => (
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-zinc-900">{item.ano}</p>
-                  <p className="text-xs text-zinc-500">
-                    {item.status} · {item.totalPrevisto} provimentos
-                  </p>
-                </div>
-              )}
-            />
-          </div>
-
-          <div className="md:flex-1">
-            <form onSubmit={handleSubmit} className="space-y-4 text-sm">
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Ano</label>
-                  <Input
-                    type="number"
-                    value={form.ano}
-                    onChange={(event) => setForm((prev) => ({ ...prev, ano: event.target.value }))}
-                    placeholder="2025"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Total previsto</label>
-                  <Input
-                    type="number"
-                    value={form.totalPrevisto}
-                    onChange={(event) => setForm((prev) => ({ ...prev, totalPrevisto: event.target.value }))}
-                    placeholder="80"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Status</label>
-                <Input
-                  value={form.status}
-                  onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value }))}
-                  placeholder="Em tramitação"
+          <KanbanDialogBody>
+            <div className="flex flex-col gap-6 md:flex-row">
+              <div className="md:w-5/12">
+                <HistoryList
+                  title="Últimas LOAs"
+                  emptyLabel="Nenhum registro encontrado."
+                  items={loas}
+                  selectedId={selectedId}
+                  onSelect={(id) => selectLoa(id)}
+                  onCreateNew={() => selectLoa(null)}
+                  renderItem={(item) => (
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-zinc-900">{item.ano}</p>
+                      <p className="text-xs text-zinc-500">
+                        {item.status} · {item.totalPrevisto} provimentos
+                      </p>
+                    </div>
+                  )}
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Descrição (opcional)</label>
-                <textarea
-                  value={form.descricao}
-                  onChange={(event) => setForm((prev) => ({ ...prev, descricao: event.target.value }))}
-                  rows={4}
-                  className="w-full rounded-2xl border border-zinc-200 bg-white/80 px-3 py-2 text-sm text-zinc-900 focus:border-red-400 focus:outline-none"
-                  placeholder="Detalhes adicionais"
-                />
+              <div className="md:flex-1">
+                <div className="space-y-4 text-sm">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Ano</label>
+                      <Input
+                        type="number"
+                        value={form.ano}
+                        onChange={(event) => setForm((prev) => ({ ...prev, ano: event.target.value }))}
+                        placeholder="2025"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Total previsto</label>
+                      <Input
+                        type="number"
+                        value={form.totalPrevisto}
+                        onChange={(event) => setForm((prev) => ({ ...prev, totalPrevisto: event.target.value }))}
+                        placeholder="80"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Status</label>
+                    <Input
+                      value={form.status}
+                      onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value }))}
+                      placeholder="Em tramitação"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Descrição (opcional)</label>
+                    <textarea
+                      value={form.descricao}
+                      onChange={(event) => setForm((prev) => ({ ...prev, descricao: event.target.value }))}
+                      rows={4}
+                      className="w-full rounded-2xl border border-zinc-200 bg-white/80 px-3 py-2 text-sm text-zinc-900 focus:border-red-400 focus:outline-none"
+                      placeholder="Detalhes adicionais"
+                    />
+                  </div>
+
+                  <label className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-600">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-zinc-300 text-red-600 focus:ring-red-500"
+                      checked={form.shouldNotify}
+                      onChange={(event) => setForm((prev) => ({ ...prev, shouldNotify: event.target.checked }))}
+                    />
+                    Notificar aprovados sobre essa atualização
+                  </label>
+
+                  <MessageBanner state={message} />
+                </div>
               </div>
+            </div>
+          </KanbanDialogBody>
 
-              <label className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-600">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-zinc-300 text-red-600 focus:ring-red-500"
-                  checked={form.shouldNotify}
-                  onChange={(event) => setForm((prev) => ({ ...prev, shouldNotify: event.target.checked }))}
-                />
-                Notificar aprovados sobre essa atualização
-              </label>
-
-              <MessageBanner state={message} />
-
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  className="rounded-full bg-red-600 px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-red-900/20 transition hover:bg-red-500 disabled:cursor-not-allowed disabled:bg-red-300"
-                >
-                  {isPending ? "Salvando..." : form.id ? "Atualizar LOA" : "Cadastrar LOA"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </DialogContent>
+          <KanbanDialogFooter>
+            <DialogClose asChild>
+              <button
+                type="button"
+                className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 transition hover:border-zinc-300"
+              >
+                Cancelar
+              </button>
+            </DialogClose>
+            <button
+              type="submit"
+              disabled={isPending}
+              className="rounded-full bg-red-600 px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-red-900/20 transition hover:bg-red-500 disabled:cursor-not-allowed disabled:bg-red-300"
+            >
+              {isPending ? "Salvando..." : form.id ? "Atualizar LOA" : "Cadastrar LOA"}
+            </button>
+          </KanbanDialogFooter>
+        </form>
+      </KanbanDialogContent>
     </Dialog>
   )
 }
 
 type CsjtModalProps = {
-  trigger?: ReactNode
+  open: boolean
+  onOpenChange: (open: boolean) => void
   autorizacoes: CsjtAuthorizationRecord[]
   loas: LoaHistoryRecord[]
+  onUpsertCsjtAuthorization: ComissaoDashboardActions["upsertCsjtAuthorization"]
 }
 
-export function CsjtModal({ trigger, autorizacoes, loas }: CsjtModalProps) {
+export function CsjtModal({ open, onOpenChange, autorizacoes, loas, onUpsertCsjtAuthorization }: CsjtModalProps) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(autorizacoes[0]?.id ?? null)
   const [message, setMessage] = useState<MessageState>(null)
   const [isPending, startTransition] = useTransition()
@@ -382,7 +376,7 @@ export function CsjtModal({ trigger, autorizacoes, loas }: CsjtModalProps) {
   }
 
   const handleDialogChange = (nextOpen: boolean) => {
-    setOpen(nextOpen)
+    onOpenChange(nextOpen)
     if (nextOpen) {
       selectAuthorization(autorizacoes[0]?.id ?? null)
       setMessage(null)
@@ -432,7 +426,7 @@ export function CsjtModal({ trigger, autorizacoes, loas }: CsjtModalProps) {
 
     startTransition(async () => {
       try {
-        await upsertCsjtAuthorizationAction({
+        await onUpsertCsjtAuthorization({
           id: form.id,
           dataAutorizacao: form.dataAutorizacao,
           totalProvimentos: totalNumber,
@@ -448,6 +442,7 @@ export function CsjtModal({ trigger, autorizacoes, loas }: CsjtModalProps) {
         setMessage({ type: "success", text: "Autorização salva." })
         setForm((prev) => ({ ...prev, shouldNotify: false }))
         router.refresh()
+        onOpenChange(false)
       } catch (error) {
         const message = error instanceof Error ? error.message : "Erro ao salvar autorização."
         setMessage({ type: "error", text: message })
@@ -455,170 +450,178 @@ export function CsjtModal({ trigger, autorizacoes, loas }: CsjtModalProps) {
     })
   }
 
-  const triggerElement = trigger ?? <ActionTriggerButton>CSJT</ActionTriggerButton>
-
   return (
     <Dialog open={open} onOpenChange={handleDialogChange}>
-      <DialogTrigger asChild>{triggerElement}</DialogTrigger>
-      <DialogContent className={cn(dialogContentClasses, "space-y-6")}>
-        <DialogHeader>
-          <DialogTitle className="text-2xl font-semibold text-zinc-900">Autorizações do CSJT</DialogTitle>
-          <DialogDescription className="text-sm text-zinc-500">
-            Controle centralizado das autorizações e destinos.
-          </DialogDescription>
-        </DialogHeader>
+      <KanbanDialogContent size="wide">
+        <form onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col">
+          <KanbanDialogHeader
+            title="Autorizações do CSJT"
+            description="Controle centralizado das autorizações e destinos."
+          />
 
-        <div className="flex flex-col gap-6 md:flex-row">
-          <div className="md:w-5/12">
-            <HistoryList
-              title="Últimas autorizações"
-              emptyLabel="Ainda não há registros."
-              items={autorizacoes}
-              selectedId={selectedId}
-              onSelect={(id) => selectAuthorization(id)}
-              onCreateNew={() => selectAuthorization(null)}
-              renderItem={(item) => (
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-zinc-900">
-                    {new Date(item.dataAutorizacao).toLocaleDateString("pt-BR")}
-                  </p>
-                  <p className="text-xs text-zinc-500">
-                    {item.totalProvimentos} provimentos · {item.destinos.length} destinos
-                  </p>
-                </div>
-              )}
-            />
-          </div>
-
-          <div className="md:flex-1">
-            <form onSubmit={handleSubmit} className="space-y-4 text-sm">
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-1">
-                  <label className={sectionTitleClasses}>Data da autorização</label>
-                  <Input
-                    type="date"
-                    value={form.dataAutorizacao}
-                    onChange={(event) => setForm((prev) => ({ ...prev, dataAutorizacao: event.target.value }))}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className={sectionTitleClasses}>Total de provimentos</label>
-                  <Input
-                    type="number"
-                    value={form.totalProvimentos}
-                    onChange={(event) => setForm((prev) => ({ ...prev, totalProvimentos: event.target.value }))}
-                    placeholder="50"
-                  />
-                </div>
+          <KanbanDialogBody>
+            <div className="flex flex-col gap-6 md:flex-row">
+              <div className="md:w-5/12">
+                <HistoryList
+                  title="Últimas autorizações"
+                  emptyLabel="Ainda não há registros."
+                  items={autorizacoes}
+                  selectedId={selectedId}
+                  onSelect={(id) => selectAuthorization(id)}
+                  onCreateNew={() => selectAuthorization(null)}
+                  renderItem={(item) => (
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-zinc-900">
+                        {new Date(item.dataAutorizacao).toLocaleDateString("pt-BR")}
+                      </p>
+                      <p className="text-xs text-zinc-500">
+                        {item.totalProvimentos} provimentos · {item.destinos.length} destinos
+                      </p>
+                    </div>
+                  )}
+                />
               </div>
 
-              <div className="space-y-1">
-                <label className={sectionTitleClasses}>LOA vinculada (opcional)</label>
-                <select
-                  value={form.loaId ?? ""}
-                  onChange={(event) => setForm((prev) => ({ ...prev, loaId: event.target.value }))}
-                  className="w-full rounded-2xl border border-zinc-200 bg-white/80 px-3 py-2 text-sm focus:border-red-400 focus:outline-none"
-                >
-                  <option value="">Sem vínculo</option>
-                  {loas.map((loa) => (
-                    <option key={loa.id} value={loa.id}>
-                      LOA {loa.ano} · {loa.totalPrevisto} vagas
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className={sectionTitleClasses}>Destinos</p>
-                  <button
-                    type="button"
-                    onClick={addDestinoRow}
-                    className="text-xs font-semibold text-red-600 hover:text-red-700"
-                  >
-                    + Destino
-                  </button>
-                </div>
-                <div className="space-y-3">
-                  {destinos.map((destino, index) => (
-                    <div key={`dest-${index}`} className="grid gap-2 rounded-2xl border border-zinc-100 bg-zinc-50/80 p-3 md:grid-cols-[1fr,1fr,120px,auto]">
+              <div className="md:flex-1">
+                <div className="space-y-4 text-sm">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className={sectionTitleClasses}>Data da autorização</label>
                       <Input
-                        placeholder="Tribunal"
-                        value={destino.tribunal}
-                        onChange={(event) => handleDestinoChange(index, "tribunal", event.target.value)}
+                        type="date"
+                        value={form.dataAutorizacao}
+                        onChange={(event) => setForm((prev) => ({ ...prev, dataAutorizacao: event.target.value }))}
                       />
-                      <Input
-                        placeholder="Cargo"
-                        value={destino.cargo}
-                        onChange={(event) => handleDestinoChange(index, "cargo", event.target.value)}
-                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className={sectionTitleClasses}>Total de provimentos</label>
                       <Input
                         type="number"
-                        placeholder="Qtd"
-                        value={destino.quantidade}
-                        onChange={(event) => handleDestinoChange(index, "quantidade", event.target.value)}
+                        value={form.totalProvimentos}
+                        onChange={(event) => setForm((prev) => ({ ...prev, totalProvimentos: event.target.value }))}
+                        placeholder="50"
                       />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className={sectionTitleClasses}>LOA vinculada (opcional)</label>
+                    <select
+                      value={form.loaId ?? ""}
+                      onChange={(event) => setForm((prev) => ({ ...prev, loaId: event.target.value }))}
+                      className="w-full rounded-2xl border border-zinc-200 bg-white/80 px-3 py-2 text-sm focus:border-red-400 focus:outline-none"
+                    >
+                      <option value="">Sem vínculo</option>
+                      {loas.map((loa) => (
+                        <option key={loa.id} value={loa.id}>
+                          LOA {loa.ano} · {loa.totalPrevisto} vagas
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className={sectionTitleClasses}>Destinos</p>
                       <button
                         type="button"
-                        className="text-xs font-semibold text-zinc-400 hover:text-red-600"
-                        onClick={() => removeDestinoRow(index)}
+                        onClick={addDestinoRow}
+                        className="text-xs font-semibold text-red-600 hover:text-red-700"
                       >
-                        Remover
+                        + Destino
                       </button>
                     </div>
-                  ))}
+                    <div className="space-y-3">
+                      {destinos.map((destino, index) => (
+                        <div key={`dest-${index}`} className="grid gap-2 rounded-2xl border border-zinc-100 bg-zinc-50/80 p-3 md:grid-cols-[1fr,1fr,120px,auto]">
+                          <Input
+                            placeholder="Tribunal"
+                            value={destino.tribunal}
+                            onChange={(event) => handleDestinoChange(index, "tribunal", event.target.value)}
+                          />
+                          <Input
+                            placeholder="Cargo"
+                            value={destino.cargo}
+                            onChange={(event) => handleDestinoChange(index, "cargo", event.target.value)}
+                          />
+                          <Input
+                            type="number"
+                            placeholder="Qtd"
+                            value={destino.quantidade}
+                            onChange={(event) => handleDestinoChange(index, "quantidade", event.target.value)}
+                          />
+                          <button
+                            type="button"
+                            className="text-xs font-semibold text-zinc-400 hover:text-red-600"
+                            onClick={() => removeDestinoRow(index)}
+                          >
+                            Remover
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-zinc-500">Soma atual: {somaDestinos} provimentos.</p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className={sectionTitleClasses}>Observação</label>
+                    <textarea
+                      value={form.observacao}
+                      onChange={(event) => setForm((prev) => ({ ...prev, observacao: event.target.value }))}
+                      rows={4}
+                      className="w-full rounded-2xl border border-zinc-200 bg-white/80 px-3 py-2 text-sm text-zinc-900 focus:border-red-400 focus:outline-none"
+                      placeholder="Anotações internas"
+                    />
+                  </div>
+
+                  <label className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-600">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-zinc-300 text-red-600 focus:ring-red-500"
+                      checked={form.shouldNotify}
+                      onChange={(event) => setForm((prev) => ({ ...prev, shouldNotify: event.target.checked }))}
+                    />
+                    Notificar aprovados sobre essa autorização
+                  </label>
+
+                  <MessageBanner state={message} />
                 </div>
-                <p className="text-xs text-zinc-500">Soma atual: {somaDestinos} provimentos.</p>
               </div>
+            </div>
+          </KanbanDialogBody>
 
-              <div className="space-y-1">
-                <label className={sectionTitleClasses}>Observação</label>
-                <textarea
-                  value={form.observacao}
-                  onChange={(event) => setForm((prev) => ({ ...prev, observacao: event.target.value }))}
-                  rows={4}
-                  className="w-full rounded-2xl border border-zinc-200 bg-white/80 px-3 py-2 text-sm text-zinc-900 focus:border-red-400 focus:outline-none"
-                  placeholder="Anotações internas"
-                />
-              </div>
-
-              <label className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-600">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-zinc-300 text-red-600 focus:ring-red-500"
-                  checked={form.shouldNotify}
-                  onChange={(event) => setForm((prev) => ({ ...prev, shouldNotify: event.target.checked }))}
-                />
-                Notificar aprovados sobre essa autorização
-              </label>
-
-              <MessageBanner state={message} />
-
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  className="rounded-full bg-red-600 px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-red-900/20 transition hover:bg-red-500 disabled:cursor-not-allowed disabled:bg-red-300"
-                >
-                  {isPending ? "Salvando..." : form.id ? "Atualizar autorização" : "Registrar autorização"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </DialogContent>
+          <KanbanDialogFooter>
+            <DialogClose asChild>
+              <button
+                type="button"
+                className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 transition hover:border-zinc-300"
+              >
+                Cancelar
+              </button>
+            </DialogClose>
+            <button
+              type="submit"
+              disabled={isPending}
+              className="rounded-full bg-red-600 px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-red-900/20 transition hover:bg-red-500 disabled:cursor-not-allowed disabled:bg-red-300"
+            >
+              {isPending ? "Salvando..." : form.id ? "Atualizar autorização" : "Registrar autorização"}
+            </button>
+          </KanbanDialogFooter>
+        </form>
+      </KanbanDialogContent>
     </Dialog>
   )
 }
 
 type CargosModalProps = {
-  trigger?: ReactNode
+  open: boolean
+  onOpenChange: (open: boolean) => void
   registros: CargosVagosRecord[]
+  onUpsertCargosVagos: ComissaoDashboardActions["upsertCargosVagos"]
 }
 
-export function CargosVagosModal({ trigger, registros }: CargosModalProps) {
+export function CargosVagosModal({ open, onOpenChange, registros, onUpsertCargosVagos }: CargosModalProps) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(registros[0]?.id ?? null)
   const [message, setMessage] = useState<MessageState>(null)
   const [isPending, startTransition] = useTransition()
@@ -637,14 +640,12 @@ export function CargosVagosModal({ trigger, registros }: CargosModalProps) {
   }
 
   const handleDialogChange = (nextOpen: boolean) => {
-    setOpen(nextOpen)
+    onOpenChange(nextOpen)
     if (nextOpen) {
       selectRegistro(registros[0]?.id ?? null)
       setMessage(null)
     }
   }
-
-  const triggerElement = trigger ?? <ActionTriggerButton>Cargos vagos</ActionTriggerButton>
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault()
@@ -665,7 +666,7 @@ export function CargosVagosModal({ trigger, registros }: CargosModalProps) {
 
     startTransition(async () => {
       try {
-        await upsertCargosVagosAction({
+        await onUpsertCargosVagos({
           id: form.id,
           dataReferencia: form.dataReferencia,
           analistaVagos: analistaNumber,
@@ -677,6 +678,7 @@ export function CargosVagosModal({ trigger, registros }: CargosModalProps) {
         setMessage({ type: "success", text: "Registro de cargos vagos salvo." })
         setForm((prev) => ({ ...prev, shouldNotify: false }))
         router.refresh()
+        onOpenChange(false)
       } catch (error) {
         const message = error instanceof Error ? error.message : "Erro ao salvar registro."
         setMessage({ type: "error", text: message })
@@ -686,128 +688,121 @@ export function CargosVagosModal({ trigger, registros }: CargosModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={handleDialogChange}>
-      <DialogTrigger asChild>{triggerElement}</DialogTrigger>
-      <DialogContent className={cn(dialogContentClasses, "space-y-6")}>
-        <DialogHeader>
-          <DialogTitle className="text-2xl font-semibold text-zinc-900">Cargos vagos TRT-2</DialogTitle>
-          <DialogDescription className="text-sm text-zinc-500">
-            Registre as últimas apurações de vagas para analistas e técnicos.
-          </DialogDescription>
-        </DialogHeader>
+      <KanbanDialogContent size="large">
+        <form onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col">
+          <KanbanDialogHeader
+            title="Cargos vagos TRT-2"
+            description="Registre as últimas apurações de vagas para analistas e técnicos."
+          />
 
-        <div className="flex flex-col gap-6 md:flex-row">
-          <div className="md:w-5/12">
-            <HistoryList
-              title="Histórico recente"
-              emptyLabel="Nenhum registro disponível."
-              items={registros}
-              selectedId={selectedId}
-              onSelect={(id) => selectRegistro(id)}
-              onCreateNew={() => selectRegistro(null)}
-              renderItem={(item) => (
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-zinc-900">
-                    {new Date(item.dataReferencia).toLocaleDateString("pt-BR")}
-                  </p>
-                  <p className="text-xs text-zinc-500">{item.analistaVagos} AJ · {item.tecnicoVagos} TJ</p>
+          <KanbanDialogBody>
+            <div className="flex flex-col gap-6 md:flex-row">
+              <div className="md:w-5/12">
+                <HistoryList
+                  title="Histórico recente"
+                  emptyLabel="Nenhum registro disponível."
+                  items={registros}
+                  selectedId={selectedId}
+                  onSelect={(id) => selectRegistro(id)}
+                  onCreateNew={() => selectRegistro(null)}
+                  renderItem={(item) => (
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-zinc-900">
+                        {new Date(item.dataReferencia).toLocaleDateString("pt-BR")}
+                      </p>
+                      <p className="text-xs text-zinc-500">{item.analistaVagos} AJ · {item.tecnicoVagos} TJ</p>
+                    </div>
+                  )}
+                />
+              </div>
+
+              <div className="md:flex-1">
+                <div className="space-y-4 text-sm">
+                  <div className="space-y-1">
+                    <label className={sectionTitleClasses}>Data de referência</label>
+                    <Input
+                      type="date"
+                      value={form.dataReferencia}
+                      onChange={(event) => setForm((prev) => ({ ...prev, dataReferencia: event.target.value }))}
+                    />
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <label className={sectionTitleClasses}>Analista</label>
+                      <Input
+                        type="number"
+                        value={form.analistaVagos}
+                        onChange={(event) => setForm((prev) => ({ ...prev, analistaVagos: event.target.value }))}
+                        placeholder="35"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className={sectionTitleClasses}>Técnico</label>
+                      <Input
+                        type="number"
+                        value={form.tecnicoVagos}
+                        onChange={(event) => setForm((prev) => ({ ...prev, tecnicoVagos: event.target.value }))}
+                        placeholder="18"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className={sectionTitleClasses}>Fonte / link (opcional)</label>
+                    <Input
+                      value={form.fonteUrl}
+                      onChange={(event) => setForm((prev) => ({ ...prev, fonteUrl: event.target.value }))}
+                      placeholder="https://..."
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className={sectionTitleClasses}>Observação</label>
+                    <textarea
+                      value={form.observacao}
+                      onChange={(event) => setForm((prev) => ({ ...prev, observacao: event.target.value }))}
+                      rows={4}
+                      className="w-full rounded-2xl border border-zinc-200 bg-white/80 px-3 py-2 text-sm text-zinc-900 focus:border-red-400 focus:outline-none"
+                      placeholder="Detalhes complementares"
+                    />
+                  </div>
+
+                  <label className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-600">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-zinc-300 text-red-600 focus:ring-red-500"
+                      checked={form.shouldNotify}
+                      onChange={(event) => setForm((prev) => ({ ...prev, shouldNotify: event.target.checked }))}
+                    />
+                    Notificar aprovados
+                  </label>
+
+                  <MessageBanner state={message} />
                 </div>
-              )}
-            />
-          </div>
-
-          <div className="md:flex-1">
-            <form onSubmit={handleSubmit} className="space-y-4 text-sm">
-              <div className="space-y-1">
-                <label className={sectionTitleClasses}>Data de referência</label>
-                <Input
-                  type="date"
-                  value={form.dataReferencia}
-                  onChange={(event) => setForm((prev) => ({ ...prev, dataReferencia: event.target.value }))}
-                />
               </div>
+            </div>
+          </KanbanDialogBody>
 
-              <div className="grid gap-3 md:grid-cols-2">
-                <div className="space-y-1">
-                  <label className={sectionTitleClasses}>Analista</label>
-                  <Input
-                    type="number"
-                    value={form.analistaVagos}
-                    onChange={(event) => setForm((prev) => ({ ...prev, analistaVagos: event.target.value }))}
-                    placeholder="35"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className={sectionTitleClasses}>Técnico</label>
-                  <Input
-                    type="number"
-                    value={form.tecnicoVagos}
-                    onChange={(event) => setForm((prev) => ({ ...prev, tecnicoVagos: event.target.value }))}
-                    placeholder="18"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className={sectionTitleClasses}>Fonte / link (opcional)</label>
-                <Input
-                  value={form.fonteUrl}
-                  onChange={(event) => setForm((prev) => ({ ...prev, fonteUrl: event.target.value }))}
-                  placeholder="https://..."
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className={sectionTitleClasses}>Observação</label>
-                <textarea
-                  value={form.observacao}
-                  onChange={(event) => setForm((prev) => ({ ...prev, observacao: event.target.value }))}
-                  rows={4}
-                  className="w-full rounded-2xl border border-zinc-200 bg-white/80 px-3 py-2 text-sm text-zinc-900 focus:border-red-400 focus:outline-none"
-                  placeholder="Detalhes complementares"
-                />
-              </div>
-
-              <label className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-600">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-zinc-300 text-red-600 focus:ring-red-500"
-                  checked={form.shouldNotify}
-                  onChange={(event) => setForm((prev) => ({ ...prev, shouldNotify: event.target.checked }))}
-                />
-                Notificar aprovados
-              </label>
-
-              <MessageBanner state={message} />
-
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  className="rounded-full bg-red-600 px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-red-900/20 transition hover:bg-red-500 disabled:cursor-not-allowed disabled:bg-red-300"
-                >
-                  {isPending ? "Salvando..." : form.id ? "Atualizar registro" : "Registrar dados"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </DialogContent>
+          <KanbanDialogFooter>
+            <DialogClose asChild>
+              <button
+                type="button"
+                className="rounded-full border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600 transition hover:border-zinc-300"
+              >
+                Cancelar
+              </button>
+            </DialogClose>
+            <button
+              type="submit"
+              disabled={isPending}
+              className="rounded-full bg-red-600 px-6 py-2 text-sm font-semibold text-white shadow-lg shadow-red-900/20 transition hover:bg-red-500 disabled:cursor-not-allowed disabled:bg-red-300"
+            >
+              {isPending ? "Salvando..." : form.id ? "Atualizar registro" : "Registrar dados"}
+            </button>
+          </KanbanDialogFooter>
+        </form>
+      </KanbanDialogContent>
     </Dialog>
-  )
-}
-
-type ResumoActionsProps = {
-  loas: LoaHistoryRecord[]
-  csjtAuthorizations: CsjtAuthorizationRecord[]
-  cargosVagos: CargosVagosRecord[]
-}
-
-export function ResumoCardActions({ loas, csjtAuthorizations, cargosVagos }: ResumoActionsProps) {
-  return (
-    <div className="grid gap-2 md:grid-cols-3">
-      <LoaModal loas={loas} />
-      <CsjtModal autorizacoes={csjtAuthorizations} loas={loas} />
-      <CargosVagosModal registros={cargosVagos} />
-    </div>
   )
 }
