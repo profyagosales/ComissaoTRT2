@@ -48,10 +48,7 @@ export default async function ComissaoPage() {
     <div className="space-y-6">
       <div className="space-y-2">
         <p className="text-xs uppercase tracking-[0.35em] text-red-900/70">Fluxo operacional</p>
-        <h1 className="text-3xl font-semibold text-red-950">Kanban da Comissão</h1>
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          Centralize LOA, listas, TDs, vacâncias e notificações diretamente nos cinco cards abaixo. Todas as ações atualizam as demais abas em tempo real.
-        </p>
+        <h1 className="text-3xl font-semibold text-red-950">Painel da Comissão</h1>
       </div>
 
       <ComissaoDashboard

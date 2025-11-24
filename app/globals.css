@@ -13,6 +13,14 @@
   body {
     @apply bg-[#f5f3f0] text-[#111111];
   }
+
+  [data-td-font="small"] {
+    font-size: 0.92em;
+  }
+
+  [data-td-font="large"] {
+    font-size: 1.12em;
+  }
 }
 
 @layer utilities {

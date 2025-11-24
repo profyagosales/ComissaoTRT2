@@ -1,17 +1,21 @@
 "use client"
 
-import { useMemo, useState, useTransition, type FormEvent } from "react"
+import { useMemo, useState, useTransition, type ChangeEvent, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
 
 import { Dialog, DialogClose } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { TD_REQUEST_TIPOS, type TdRequestTipo } from "@/features/tds/td-types"
+import { RichTextEditor } from "@/components/ui/rich-text-editor"
+import { supabaseBrowser } from "@/lib/supabase-browser"
 import { KanbanDialogBody, KanbanDialogContent, KanbanDialogFooter, KanbanDialogHeader } from "./KanbanDialog"
 
 import type { CandidateSummary, PendingTdRequest } from "./loadComissaoData"
 import type { TdContentSettings } from "@/features/tds/td-content"
+import { TD_CONTENT_DEFAULTS } from "@/features/tds/td-content"
 import type { ComissaoDashboardActions } from "./comissao-action-types"
 
 function MessageBanner({ state }: { state: { type: "success" | "error"; text: string } | null }) {
@@ -135,29 +139,112 @@ type TdContentEditorModalProps = {
   onUpsertTdContent: ComissaoDashboardActions["upsertTdContent"]
 }
 
+type EditableModel = { clientId: string; label: string; url: string }
+type TdContentFormState = {
+  howItWorksHtml: string
+  guidelinesHtml: string
+  models: EditableModel[]
+}
+
+const TD_MODELS_BUCKET = process.env.NEXT_PUBLIC_TD_MODELS_BUCKET || "avatars"
+const TD_MODELS_FOLDER = "td-models"
+
+const createClientId = () => (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`)
+
+const mapContentToForm = (content: TdContentSettings): TdContentFormState => ({
+  howItWorksHtml: content.howItWorksHtml || TD_CONTENT_DEFAULTS.howItWorksHtml,
+  guidelinesHtml: content.guidelinesHtml || TD_CONTENT_DEFAULTS.guidelinesHtml,
+  models: (content.models ?? []).map((model, index) => ({
+    clientId: createClientId() + index,
+    label: model.label,
+    url: model.url,
+  })),
+})
+
+const stripHtml = (html: string) => html.replace(/<[^>]+>/g, "").trim()
+
+const prettyFileName = (url: string) => {
+  try {
+    const fileName = new URL(url).pathname.split("/").pop()
+    return fileName || url
+  } catch {
+    return url
+  }
+}
+
 export function TdContentEditorModal({ open, onOpenChange, content, onUpsertTdContent }: TdContentEditorModalProps) {
   const router = useRouter()
-  const [form, setForm] = useState(() => ({
-    overview: content.overview,
-    instructions: content.instructions,
-    models: content.models.length ? content.models : [{ label: "", url: "" }],
-  }))
+  const [form, setForm] = useState<TdContentFormState>(() => mapContentToForm(content))
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [uploadState, setUploadState] = useState<{ type: "success" | "error"; text: string } | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const [fileInput, setFileInput] = useState<HTMLInputElement | null>(null)
 
-  const handleModelChange = (index: number, field: "label" | "url", value: string) => {
+  const setFileInputRef = (element: HTMLInputElement | null) => {
+    setFileInput(element)
+  }
+
+  const handleModelLabelChange = (clientId: string, label: string) => {
     setForm((prev) => ({
       ...prev,
-      models: prev.models.map((model, idx) => (idx === index ? { ...model, [field]: value } : model)),
+      models: prev.models.map((model) => (model.clientId === clientId ? { ...model, label } : model)),
     }))
   }
 
-  const addModel = () => {
-    setForm((prev) => ({ ...prev, models: [...prev.models, { label: "", url: "" }] }))
+  const removeModel = (clientId: string) => {
+    setForm((prev) => ({ ...prev, models: prev.models.filter((model) => model.clientId !== clientId) }))
   }
 
-  const removeModel = (index: number) => {
-    setForm((prev) => ({ ...prev, models: prev.models.filter((_, idx) => idx !== index) }))
+  const handleUploadClick = () => {
+    setUploadState(null)
+    fileInput?.click()
+  }
+
+  const handleFileSelected = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ""
+    if (!file) return
+    setUploadState(null)
+    setIsUploading(true)
+
+    try {
+      const uploadedModel = await uploadModelFile(file)
+      setForm((prev) => ({ ...prev, models: [...prev.models, uploadedModel] }))
+      setUploadState({ type: "success", text: "Arquivo enviado. Ajuste o rótulo se necessário." })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Não foi possível enviar o arquivo."
+      setUploadState({ type: "error", text: message })
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  const uploadModelFile = async (file: File): Promise<EditableModel> => {
+    const extension = file.name.split(".").pop()?.toLowerCase() || "pdf"
+    const uniqueId = createClientId()
+    const path = `${TD_MODELS_FOLDER}/${uniqueId}.${extension}`
+
+    const { error } = await supabaseBrowser.storage.from(TD_MODELS_BUCKET).upload(path, file, { upsert: false })
+    if (error) {
+      console.error("[TdContentEditorModal] erro ao enviar modelo", error)
+      if (typeof error.message === "string" && error.message.toLowerCase().includes("bucket")) {
+        throw new Error("Bucket de Storage não encontrado. Configure NEXT_PUBLIC_TD_MODELS_BUCKET com um bucket válido no Supabase e tente novamente.")
+      }
+      throw new Error("Falha ao enviar o arquivo para o Storage.")
+    }
+
+    const { data: publicData } = supabaseBrowser.storage.from(TD_MODELS_BUCKET).getPublicUrl(path)
+    const publicUrl = publicData?.publicUrl
+    if (!publicUrl) {
+      throw new Error("Não foi possível gerar o link público do arquivo.")
+    }
+
+    return {
+      clientId: uniqueId,
+      label: file.name.replace(/\.[^/.]+$/, ""),
+      url: publicUrl,
+    }
   }
 
   const handleSubmit = (event: FormEvent) => {
@@ -168,16 +255,16 @@ export function TdContentEditorModal({ open, onOpenChange, content, onUpsertTdCo
       .map((model) => ({ label: model.label.trim(), url: model.url.trim() }))
       .filter((model) => model.label && model.url)
 
-    if (!form.overview.trim() || !form.instructions.trim()) {
-      setFeedback({ type: "error", text: "Preencha os textos principais antes de salvar." })
+    if (!stripHtml(form.howItWorksHtml) || !stripHtml(form.guidelinesHtml)) {
+      setFeedback({ type: "error", text: "As seções de texto precisam ter conteúdo." })
       return
     }
 
     startTransition(async () => {
       try {
         await onUpsertTdContent({
-          overview: form.overview.trim(),
-          instructions: form.instructions.trim(),
+          howItWorksHtml: form.howItWorksHtml,
+          guidelinesHtml: form.guidelinesHtml,
           models: payloadModels,
         })
         setFeedback({ type: "success", text: "Conteúdo atualizado." })
@@ -193,12 +280,9 @@ export function TdContentEditorModal({ open, onOpenChange, content, onUpsertTdCo
   const handleDialogChange = (nextOpen: boolean) => {
     onOpenChange(nextOpen)
     if (nextOpen) {
-      setForm({
-        overview: content.overview,
-        instructions: content.instructions,
-        models: content.models.length ? content.models : [{ label: "", url: "" }],
-      })
+      setForm(mapContentToForm(content))
       setFeedback(null)
+      setUploadState(null)
     }
   }
 
@@ -206,64 +290,109 @@ export function TdContentEditorModal({ open, onOpenChange, content, onUpsertTdCo
     <Dialog open={open} onOpenChange={handleDialogChange}>
       <KanbanDialogContent size="wide">
         <form onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col">
-          <KanbanDialogHeader
-            title="Editor de conteúdo do TD"
-            description="Atualize os textos exibidos para todos os aprovados na página de TDs."
-          />
+          <KanbanDialogHeader title="Editor de conteúdo do TD" />
 
           <KanbanDialogBody>
             <div className="space-y-4 text-sm">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Resumo principal</label>
-                <textarea
-                  value={form.overview}
-                  onChange={(event) => setForm((prev) => ({ ...prev, overview: event.target.value }))}
-                  rows={3}
-                  className="w-full rounded-2xl border border-zinc-200 bg-white/80 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
-                  placeholder="Explique rapidamente o objetivo do TD."
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Instruções detalhadas</label>
-                <textarea
-                  value={form.instructions}
-                  onChange={(event) => setForm((prev) => ({ ...prev, instructions: event.target.value }))}
-                  rows={5}
-                  className="w-full rounded-2xl border border-zinc-200 bg-white/80 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
-                  placeholder="Liste orientações gerais, documentação e prazos."
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Como funciona o TD?</p>
+                <RichTextEditor
+                  value={form.howItWorksHtml}
+                  onChange={(value) => setForm((prev) => ({ ...prev, howItWorksHtml: value }))}
+                  placeholder="Descreva aos aprovados como funciona o envio do TD..."
+                  ariaLabel="Como funciona o TD"
                 />
               </div>
 
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Modelos disponíveis</label>
-                  <button type="button" onClick={addModel} className="text-xs font-semibold text-amber-600 hover:text-amber-700">
-                    + Modelo
-                  </button>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Orientações gerais</p>
+                <RichTextEditor
+                  value={form.guidelinesHtml}
+                  onChange={(value) => setForm((prev) => ({ ...prev, guidelinesHtml: value }))}
+                  placeholder="Inclua orientações de envio, prazos e anexos obrigatórios."
+                  ariaLabel="Orientações gerais"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Modelos de TD</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      ref={setFileInputRef}
+                      type="file"
+                      accept=".pdf,.doc,.docx,.odt"
+                      className="hidden"
+                      onChange={handleFileSelected}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleUploadClick}
+                      disabled={isUploading}
+                      className="rounded-full border-amber-200 text-amber-700 hover:border-amber-300"
+                    >
+                      {isUploading ? "Enviando..." : "Enviar arquivo de modelo"}
+                    </Button>
+                  </div>
                 </div>
+
+                {uploadState ? <MessageBanner state={uploadState} /> : null}
+
                 <div className="space-y-3">
-                  {form.models.map((model, index) => (
-                    <div key={`model-${index}`} className="grid gap-2 rounded-2xl border border-zinc-100 bg-zinc-50/80 p-3 md:grid-cols-[1fr,1fr,auto]">
-                      <Input
-                        value={model.label}
-                        onChange={(event) => handleModelChange(index, "label", event.target.value)}
-                        placeholder="Descrição do modelo"
-                      />
-                      <Input
-                        value={model.url}
-                        onChange={(event) => handleModelChange(index, "url", event.target.value)}
-                        placeholder="https://..."
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeModel(index)}
-                        className="text-xs font-semibold text-zinc-400 hover:text-red-600"
-                      >
-                        Remover
-                      </button>
+                  {form.models.length ? (
+                    form.models.map((model) => (
+                      <div key={model.clientId} className="space-y-2 rounded-2xl border border-zinc-100 bg-white/90 p-3">
+                        <div className="space-y-1">
+                          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Rótulo exibido</label>
+                          <Input
+                            value={model.label}
+                            onChange={(event) => handleModelLabelChange(model.clientId, event.target.value)}
+                            placeholder="Modelo TD - Ampla / PPP (PDF)"
+                          />
+                        </div>
+                        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-dashed border-rose-200 bg-rose-50/60 px-3 py-2 text-xs text-rose-900">
+                          <span className="truncate">{prettyFileName(model.url)}</span>
+                          <a
+                            href={model.url}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            className="text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-700"
+                          >
+                            Abrir
+                          </a>
+                        </div>
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => removeModel(model.clientId)}
+                            className="text-xs font-semibold text-zinc-400 hover:text-red-600"
+                          >
+                            Remover
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-2xl border-2 border-dashed border-rose-200 bg-rose-50/60 px-4 py-6 text-center">
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-600">Modelo de TD</p>
+                      <p className="mt-2 text-sm text-rose-900">Envie o primeiro arquivo em PDF, DOC ou DOCX.</p>
+                      <div className="mt-4 flex justify-center">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleUploadClick}
+                          disabled={isUploading}
+                          className="rounded-full border-rose-200 bg-white text-rose-700 hover:border-rose-300"
+                        >
+                          {isUploading ? "Enviando..." : "Selecionar arquivo"}
+                        </Button>
+                      </div>
+                      <p className="mt-2 text-[11px] text-rose-700">Tamanho máximo conforme limite do Supabase Storage.</p>
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
 

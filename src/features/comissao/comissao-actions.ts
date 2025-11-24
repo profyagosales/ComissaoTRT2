@@ -873,24 +873,31 @@ export async function createManualTdAction(input: {
 }
 
 export async function upsertTdContentAction(input: {
-  overview: string
-  instructions: string
+  howItWorksHtml: string
+  guidelinesHtml: string
   models: { label: string; url: string }[]
 }) {
   const supabase = await createSupabaseServerClient()
   await assertComissaoUser()
 
-  const overview = input.overview?.trim()
-  const instructions = input.instructions?.trim()
-  if (!overview || !instructions) {
-    throw new Error("Informe os textos principais para salvar o conteúdo do TD.")
+  const howItWorksHtml = (input.howItWorksHtml ?? "").trim()
+  const guidelinesHtml = (input.guidelinesHtml ?? "").trim()
+
+  const hasContent = (html: string) => html.replace(/<[^>]+>/g, "").trim().length > 0
+
+  if (!hasContent(howItWorksHtml) || !hasContent(guidelinesHtml)) {
+    throw new Error("As seções de texto precisam ter conteúdo antes de salvar.")
   }
 
   const models = (input.models ?? [])
     .map((model) => ({ label: model.label?.trim() ?? "", url: model.url?.trim() ?? "" }))
     .filter((model) => model.label && model.url)
 
-  const payload = { overview, instructions, models }
+  const payload = {
+    howItWorksHtml,
+    guidelinesHtml,
+    models,
+  }
   const nowIso = new Date().toISOString()
 
   const { error } = await supabase

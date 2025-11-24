@@ -1,10 +1,10 @@
 "use client"
 
-import { useMemo, useState, type ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 import { ClipboardList, FileSignature, ListChecks, Megaphone, Settings2 } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { formatDateBrMedium } from "@/lib/date-format"
+import { cn } from "@/lib/utils"
 import { LoaModal, CsjtModal, CargosVagosModal } from "./ResumoCardModals"
 import { PendenciasModal, NovoCandidatoModal, NomeacaoModal, NovaAprovacaoModal } from "./ListasCardModals"
 import { TdPendenciasModal, TdContentEditorModal, TdManualModal } from "./TdCardModals"
@@ -15,20 +15,33 @@ import type { ComissaoDashboardActions } from "./comissao-action-types"
 
 type DashboardCardProps = {
   title: string
-  description: string
+  description?: string
   children: ReactNode
   icon?: ReactNode
+  accentClass?: string
+  iconClass?: string
 }
 
-function DashboardCard({ title, description, children, icon }: DashboardCardProps) {
+function DashboardCard({ title, description, children, icon, accentClass, iconClass }: DashboardCardProps) {
+  const accentBadgeClass = accentClass ?? "bg-zinc-100 text-zinc-700"
+
   return (
     <Card className="h-full border-none bg-white/95 shadow-lg shadow-zinc-200/60">
-      <CardHeader className="flex flex-row items-start gap-3">
-        {icon ? <div className="rounded-2xl bg-red-50 p-2 text-red-700">{icon}</div> : null}
-        <div>
-          <CardTitle className="text-lg font-semibold text-zinc-900">{title}</CardTitle>
-          <CardDescription className="text-sm text-zinc-500">{description}</CardDescription>
+      <CardHeader className="space-y-3">
+        <div className="flex items-start gap-3">
+          {icon ? (
+            <div className={cn("rounded-2xl p-2", iconClass ?? accentBadgeClass)}>
+              {icon}
+            </div>
+          ) : null}
+          <div>
+            <CardTitle className="text-lg font-semibold text-zinc-900">{title}</CardTitle>
+            {description ? <CardDescription className="text-sm text-zinc-500">{description}</CardDescription> : null}
+          </div>
         </div>
+        <span className={cn("inline-flex w-fit rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.3em]", accentBadgeClass)}>
+          {description ?? title}
+        </span>
       </CardHeader>
       <CardContent className="space-y-4">{children}</CardContent>
     </Card>
@@ -46,7 +59,10 @@ function CardActionButton({ children, onClick, variant = "red" }: { children: Re
     <button
       type="button"
       onClick={onClick}
-      className={`w-full rounded-full border bg-white/90 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] shadow-sm transition ${palette}`}
+      className={cn(
+        "w-full rounded-full border bg-white/90 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] shadow-sm transition",
+        palette,
+      )}
     >
       {children}
     </button>
@@ -62,9 +78,6 @@ export function ComissaoDashboard({ data, actions }: ComissaoDashboardProps) {
   const {
     pendingOutrasAprovacoesCount,
     pendingTdCount,
-    latestLoa,
-    latestCsjtAuthorization,
-    latestCargosVagos,
     outrasAprovacoes,
     tdRequests,
     loasHistory,
@@ -97,96 +110,55 @@ export function ComissaoDashboard({ data, actions }: ComissaoDashboardProps) {
 
   const outrasPreview = outrasAprovacoes.slice(0, 3)
   const tdPreview = tdRequests.slice(0, 3)
-  const vacanciasPreview = vacanciasHistory.slice(0, 3)
-
-  const notificationsSummary = useMemo(() => {
-    const summary = { pendentes: 0, falhas: 0, enviadas: 0 }
-    notificationsQueue.forEach((item) => {
-      if (item.status === "PENDENTE") summary.pendentes += 1
-      if (item.status === "ERRO") summary.falhas += 1
-      if (item.status === "ENVIADO") summary.enviadas += 1
-    })
-    return summary
-  }, [notificationsQueue])
-
-  const destaqueControle = notificationsQueue[0]
-
-  const resumoHighlights = [
-    {
-      label: "LOA",
-      value: latestLoa ? `Ano ${latestLoa.ano}` : "Sem LOA",
-      helper: latestLoa ? `${latestLoa.totalPrevisto} provimentos · ${latestLoa.status}` : "Cadastre uma LOA para iniciar",
-    },
-    {
-      label: "CSJT",
-      value: latestCsjtAuthorization ? `${latestCsjtAuthorization.totalProvimentos} vagas` : "Sem autorizações",
-      helper: latestCsjtAuthorization ? `Autorizado em ${formatDateBrMedium(latestCsjtAuthorization.dataAutorizacao)}` : "Inclua a última deliberação",
-    },
-    {
-      label: "Cargos vagos",
-      value: latestCargosVagos
-        ? `${latestCargosVagos.analistaVagos} AJ · ${latestCargosVagos.tecnicoVagos} TJ`
-        : "Sem dados",
-      helper: latestCargosVagos ? `Referência ${formatDateBrMedium(latestCargosVagos.dataReferencia)}` : "Registre o levantamento mais recente",
-    },
-  ]
 
   const boardColumns = [
     {
       key: "resumo",
       title: "Resumo",
-      description: "LOA, CSJT e cargos vagos",
+      description: "Acesso rápido aos cadastros",
       icon: <ClipboardList className="h-5 w-5" />,
+      accentClass: "bg-red-100 text-red-900",
+      iconClass: "bg-red-50 text-red-700",
       content: (
-        <>
-          <div className="space-y-3 text-sm">
-            {resumoHighlights.map((item) => (
-              <div key={item.label} className="rounded-2xl border border-zinc-100 bg-zinc-50/80 p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-400">{item.label}</p>
-                <p className="text-lg font-semibold text-zinc-900">{item.value}</p>
-                <p className="text-xs text-zinc-500">{item.helper}</p>
-              </div>
-            ))}
-          </div>
-          <div className="grid gap-2 md:grid-cols-3">
-            <CardActionButton onClick={() => setOpenLoa(true)}>LOA</CardActionButton>
-            <CardActionButton onClick={() => setOpenCsjt(true)}>CSJT</CardActionButton>
-            <CardActionButton onClick={() => setOpenCargosVagos(true)}>CARGOS VAGOS</CardActionButton>
-          </div>
-        </>
+        <div className="space-y-2">
+          <CardActionButton onClick={() => setOpenLoa(true)}>LOA</CardActionButton>
+          <CardActionButton onClick={() => setOpenCsjt(true)}>CSJT</CardActionButton>
+          <CardActionButton onClick={() => setOpenCargosVagos(true)}>CARGOS VAGOS</CardActionButton>
+        </div>
       ),
     },
     {
       key: "listas",
       title: "Listas",
-      description: "Pendências das outras aprovações",
+      description: "Pendências e ações rápidas",
       icon: <ListChecks className="h-5 w-5" />,
+      accentClass: "bg-rose-100 text-rose-900",
+      iconClass: "bg-rose-50 text-rose-700",
       content: (
         <>
-          <div className="flex items-center justify-between rounded-2xl border border-red-100 bg-red-50/40 p-4">
-            <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-red-500">Pendentes</p>
-              <p className="text-3xl font-semibold text-red-900">{pendingOutrasAprovacoesCount}</p>
-            </div>
-            <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-red-600">Outras aprovações</span>
+          <button
+            type="button"
+            onClick={() => setOpenPendenciasListas(true)}
+            className="w-full rounded-2xl border border-red-100 bg-red-50/50 p-3 text-center shadow-sm transition hover:border-red-200 hover:bg-red-100/60"
+          >
+            <p className="text-xs uppercase tracking-[0.3em] text-red-500">Pendentes</p>
+            <p className="text-3xl font-semibold text-red-900">{pendingOutrasAprovacoesCount}</p>
+            <span className="mt-3 inline-flex rounded-full bg-white px-3 py-1 text-xs font-semibold text-red-600">Outras aprovações</span>
+          </button>
+          <div className="space-y-1.5">
+            {outrasPreview.length
+              ? outrasPreview.map((approval) => (
+                  <div key={approval.id} className="rounded-xl border border-zinc-100 bg-white px-3 py-2 text-sm">
+                    <p className="font-semibold text-zinc-900">{approval.candidatoNome}</p>
+                    <p className="text-xs text-zinc-500">{approval.orgao}</p>
+                  </div>
+                ))
+              : null}
           </div>
           <div className="space-y-2">
-            {outrasPreview.length ? (
-              outrasPreview.map((approval) => (
-                <div key={approval.id} className="rounded-xl border border-zinc-100 bg-white px-3 py-2 text-sm">
-                  <p className="font-semibold text-zinc-900">{approval.candidatoNome}</p>
-                  <p className="text-xs text-zinc-500">{approval.orgao}</p>
-                </div>
-              ))
-            ) : (
-              <p className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50 px-3 py-4 text-sm text-zinc-500">Nenhum envio recente.</p>
-            )}
-          </div>
-          <div className="grid gap-2 md:grid-cols-2">
-            <CardActionButton onClick={() => setOpenPendenciasListas(true)}>PENDÊNCIAS</CardActionButton>
-            <CardActionButton onClick={() => setOpenAdicionarAprovado(true)}>ADICIONAR APROVADO</CardActionButton>
-            <CardActionButton onClick={() => setOpenNomeacoes(true)}>NOMEAÇÕES</CardActionButton>
-            <CardActionButton onClick={() => setOpenAprovacaoManual(true)}>APROVAÇÃO MANUAL</CardActionButton>
+            <CardActionButton onClick={() => setOpenAdicionarAprovado(true)}>Adicionar aprovado</CardActionButton>
+            <CardActionButton onClick={() => setOpenNomeacoes(true)}>Nova nomeação</CardActionButton>
+            <CardActionButton onClick={() => setOpenAprovacaoManual(true)}>Outras aprovações</CardActionButton>
           </div>
         </>
       ),
@@ -194,30 +166,38 @@ export function ComissaoDashboard({ data, actions }: ComissaoDashboardProps) {
     {
       key: "tds",
       title: "TDs",
-      description: "Solicitações enviadas",
+      description: "Fluxo de termos",
       icon: <FileSignature className="h-5 w-5" />,
+      accentClass: "bg-amber-100 text-amber-900",
+      iconClass: "bg-amber-50 text-amber-700",
       content: (
         <>
-          <div className="rounded-2xl border border-amber-100 bg-amber-50/40 p-4">
+          <button
+            type="button"
+            onClick={() => setOpenPendenciasTds(true)}
+            className="w-full rounded-2xl border border-amber-100 bg-amber-50/50 p-3 text-center shadow-sm transition hover:border-amber-200 hover:bg-amber-100/60"
+          >
             <p className="text-xs uppercase tracking-[0.3em] text-amber-600">Pendentes</p>
             <p className="text-3xl font-semibold text-amber-900">{pendingTdCount}</p>
+            <span className="mt-3 inline-flex rounded-full bg-white px-3 py-1 text-xs font-semibold text-amber-700">TDs</span>
+          </button>
+          <div className="space-y-1.5">
+            {tdPreview.length
+              ? tdPreview.map((td) => (
+                  <div key={td.id} className="rounded-xl border border-zinc-100 bg-white px-3 py-2 text-sm">
+                    <p className="font-semibold text-zinc-900">{td.candidatoNome}</p>
+                    <p className="text-xs text-zinc-500">{td.tipoTd === "ENVIADO" ? "TD enviado" : "Interessado"}</p>
+                  </div>
+                ))
+              : null}
           </div>
           <div className="space-y-2">
-            {tdPreview.length ? (
-              tdPreview.map((td) => (
-                <div key={td.id} className="rounded-xl border border-zinc-100 bg-white px-3 py-2 text-sm">
-                  <p className="font-semibold text-zinc-900">{td.candidatoNome}</p>
-                  <p className="text-xs text-zinc-500">{td.tipoTd === "ENVIADO" ? "TD enviado" : "Interessado"}</p>
-                </div>
-              ))
-            ) : (
-              <p className="rounded-xl border border-dashed border-zinc-200 bg-zinc-50 px-3 py-4 text-sm text-zinc-500">Nenhuma solicitação aguardando revisão.</p>
-            )}
-          </div>
-          <div className="grid gap-2">
-            <CardActionButton variant="amber" onClick={() => setOpenPendenciasTds(true)}>PENDÊNCIAS</CardActionButton>
-            <CardActionButton variant="amber" onClick={() => setOpenEditarTdConteudo(true)}>EDITAR CONTEÚDO</CardActionButton>
-            <CardActionButton variant="amber" onClick={() => setOpenCadastroTdManual(true)}>CADASTRO MANUAL</CardActionButton>
+            <CardActionButton variant="amber" onClick={() => setOpenEditarTdConteudo(true)}>
+              Editar textos
+            </CardActionButton>
+            <CardActionButton variant="amber" onClick={() => setOpenCadastroTdManual(true)}>
+              Adicionar TD
+            </CardActionButton>
           </div>
         </>
       ),
@@ -225,29 +205,15 @@ export function ComissaoDashboard({ data, actions }: ComissaoDashboardProps) {
     {
       key: "vacancias",
       title: "Vacâncias",
-      description: "Saídas e impactos",
+      description: "Comunicações e histórico",
       icon: <Megaphone className="h-5 w-5" />,
+      accentClass: "bg-orange-100 text-orange-900",
+      iconClass: "bg-orange-50 text-orange-700",
       content: (
-        <>
-          <div className="space-y-2 text-sm">
-            {vacanciasPreview.length ? (
-              vacanciasPreview.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-zinc-100 bg-zinc-50/80 p-3">
-                  <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">{item.tribunal ?? "TRT-2"}</p>
-                  <p className="text-base font-semibold text-zinc-900">{item.cargo ?? "Cargo"}</p>
-                  <p className="text-xs text-zinc-500">{item.motivo ?? "Sem motivo"}</p>
-                  <p className="text-[11px] text-zinc-400">{formatDateBrMedium(item.data)}</p>
-                </div>
-              ))
-            ) : (
-              <p className="rounded-2xl border border-dashed border-zinc-200 bg-white/80 px-3 py-4 text-sm text-zinc-500">Nenhuma vacância registrada até o momento.</p>
-            )}
-          </div>
-          <div className="grid gap-2 md:grid-cols-2">
-            <CardActionButton onClick={() => setOpenNovaVacancia(true)}>NOVA VACÂNCIA</CardActionButton>
-            <CardActionButton onClick={() => setOpenHistoricoVacancias(true)}>HISTÓRICO</CardActionButton>
-          </div>
-        </>
+        <div className="space-y-2">
+          <CardActionButton onClick={() => setOpenNovaVacancia(true)}>Nova vacância</CardActionButton>
+          <CardActionButton onClick={() => setOpenHistoricoVacancias(true)}>Histórico</CardActionButton>
+        </div>
       ),
     },
     {
@@ -255,41 +221,34 @@ export function ComissaoDashboard({ data, actions }: ComissaoDashboardProps) {
       title: "Controle",
       description: "Notificações e relatórios",
       icon: <Settings2 className="h-5 w-5" />,
+      accentClass: "bg-slate-200 text-slate-900",
+      iconClass: "bg-slate-100 text-slate-700",
       content: (
-        <>
-          <div className="rounded-2xl border border-zinc-100 bg-white/80 p-4 text-sm">
-            <div className="flex flex-wrap items-center gap-3 text-xs">
-              <span className="rounded-full bg-amber-50 px-3 py-1 font-semibold text-amber-700">Pendentes: {notificationsSummary.pendentes}</span>
-              <span className="rounded-full bg-red-50 px-3 py-1 font-semibold text-red-700">Falhas: {notificationsSummary.falhas}</span>
-              <span className="rounded-full bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">Enviadas: {notificationsSummary.enviadas}</span>
-            </div>
-            {destaqueControle ? (
-              <div className="mt-3 space-y-1">
-                <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">Última mensagem</p>
-                <p className="text-base font-semibold text-zinc-900">{destaqueControle.titulo}</p>
-                <p className="text-xs text-zinc-500 line-clamp-2">{destaqueControle.corpo}</p>
-              </div>
-            ) : (
-              <p className="mt-3 text-xs text-zinc-500">Fila vazia no momento.</p>
-            )}
-          </div>
-          <div className="grid gap-2 md:grid-cols-2">
-            <CardActionButton onClick={() => setOpenFilaNotificacoes(true)}>FILA DE NOTIFICAÇÕES</CardActionButton>
-            <CardActionButton onClick={() => setOpenRelatorios(true)}>RELATÓRIOS</CardActionButton>
-          </div>
-        </>
+        <div className="space-y-2">
+          <CardActionButton onClick={() => setOpenFilaNotificacoes(true)}>Nova notificação</CardActionButton>
+          <CardActionButton onClick={() => setOpenRelatorios(true)}>Relatórios</CardActionButton>
+        </div>
       ),
     },
   ]
 
   return (
     <>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
-        {boardColumns.map((column) => (
-          <DashboardCard key={column.key} title={column.title} description={column.description} icon={column.icon}>
-            {column.content}
-          </DashboardCard>
-        ))}
+      <div className="overflow-x-auto pb-2">
+        <div className="grid grid-flow-col auto-cols-[minmax(240px,1fr)] gap-3">
+          {boardColumns.map((column) => (
+            <DashboardCard
+              key={column.key}
+              title={column.title}
+              description={column.description}
+              icon={column.icon}
+              accentClass={column.accentClass}
+              iconClass={column.iconClass}
+            >
+              {column.content}
+            </DashboardCard>
+          ))}
+        </div>
       </div>
 
       <LoaModal open={openLoa} onOpenChange={setOpenLoa} loas={loasHistory} onUpsertLoa={actions.upsertLoa} />

@@ -527,14 +527,25 @@ export async function loadComissaoData(): Promise<ComissaoDashboardData> {
     : null
 
   const candidates = candidateSummaries
-  let tdContent: TdContentSettings = DEFAULT_TD_CONTENT
+  let tdContent: TdContentSettings = { ...DEFAULT_TD_CONTENT }
   if (tdContentResult.data?.content) {
+    const stored = tdContentResult.data.content as Record<string, unknown>
+    const models = Array.isArray(stored.models)
+      ? (stored.models as TdContentSettings["models"]).filter((model) => Boolean(model?.label) && Boolean(model?.url))
+      : DEFAULT_TD_CONTENT.models
+
     tdContent = {
-      overview: tdContentResult.data.content.overview || DEFAULT_TD_CONTENT.overview,
-      instructions: tdContentResult.data.content.instructions || DEFAULT_TD_CONTENT.instructions,
-      models: Array.isArray(tdContentResult.data.content.models) && tdContentResult.data.content.models.length
-        ? tdContentResult.data.content.models.filter((model) => Boolean(model?.label) && Boolean(model?.url))
-        : DEFAULT_TD_CONTENT.models,
+      howItWorksHtml: typeof stored.howItWorksHtml === "string"
+        ? stored.howItWorksHtml
+        : typeof stored.overview === "string"
+          ? stored.overview
+          : DEFAULT_TD_CONTENT.howItWorksHtml,
+      guidelinesHtml: typeof stored.guidelinesHtml === "string"
+        ? stored.guidelinesHtml
+        : typeof stored.instructions === "string"
+          ? stored.instructions
+          : DEFAULT_TD_CONTENT.guidelinesHtml,
+      models,
     }
   } else if (tdContentResult.error && tdContentResult.error.code !== "PGRST116") {
     console.error("[loadComissaoData] erro ao buscar td_content_settings", tdContentResult.error)
