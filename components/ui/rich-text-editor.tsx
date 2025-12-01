@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react"
 import DOMPurify from "dompurify"
 import { Bold, Italic, Underline, List, ListOrdered, Link2, Eraser, type LucideIcon } from "lucide-react"
 
@@ -22,6 +22,10 @@ type ToolbarButton = {
 }
 
 type FontSizeControl = "small" | "reset" | "large"
+type ColorOption = {
+  label: string
+  value: string
+}
 
 const FONT_SIZE_CONTROLS: { key: FontSizeControl; label: string; description: string }[] = [
   { key: "small", label: "A-", description: "Diminuir fonte" },
@@ -37,6 +41,22 @@ const TOOLBAR_BUTTONS: ToolbarButton[] = [
   { icon: ListOrdered, label: "Lista numerada", command: "insertOrderedList" },
   { icon: Link2, label: "Inserir link", command: "createLink", needsValue: true },
   { icon: Eraser, label: "Limpar formatação", command: "removeFormat" },
+]
+
+const FONT_COLOR_OPTIONS: ColorOption[] = [
+  { label: "Padrão", value: "#1f2937" },
+  { label: "Rosa", value: "#be123c" },
+  { label: "Âmbar", value: "#b45309" },
+  { label: "Azul", value: "#1d4ed8" },
+  { label: "Verde", value: "#15803d" },
+]
+
+const HIGHLIGHT_COLOR_OPTIONS: ColorOption[] = [
+  { label: "Limpar", value: "transparent" },
+  { label: "Amarelo", value: "#fef08a" },
+  { label: "Rosa", value: "#fbcfe8" },
+  { label: "Azul", value: "#bae6fd" },
+  { label: "Verde", value: "#d9f99d" },
 ]
 
 export function RichTextEditor({ value, onChange, placeholder, className, ariaLabel }: RichTextEditorProps) {
@@ -68,6 +88,20 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
       document.execCommand(command, false)
     }
 
+    editorRef.current?.focus()
+    handleInput()
+  }
+
+  const applyFontColor = (color: string) => {
+    if (typeof document === "undefined") return
+    document.execCommand("foreColor", false, color)
+    editorRef.current?.focus()
+    handleInput()
+  }
+
+  const applyHighlightColor = (color: string) => {
+    if (typeof document === "undefined") return
+    document.execCommand("hiliteColor", false, color)
     editorRef.current?.focus()
     handleInput()
   }
@@ -159,6 +193,49 @@ export function RichTextEditor({ value, onChange, placeholder, className, ariaLa
             <button.icon className="h-4 w-4" />
           </button>
         ))}
+
+        <div className="flex items-center gap-2">
+          <select
+            defaultValue=""
+            aria-label="Cor da fonte"
+            onChange={(event: ChangeEvent<HTMLSelectElement>) => {
+              const color = event.target.value
+              if (!color) return
+              applyFontColor(color)
+              event.target.value = ""
+            }}
+            className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-[11px] font-semibold text-zinc-600 transition hover:border-zinc-400 focus:outline-none"
+          >
+            <option value="" disabled>
+              Cor texto
+            </option>
+            {FONT_COLOR_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <select
+            defaultValue=""
+            aria-label="Cor de destaque"
+            onChange={(event: ChangeEvent<HTMLSelectElement>) => {
+              const color = event.target.value
+              if (!color) return
+              applyHighlightColor(color)
+              event.target.value = ""
+            }}
+            className="rounded-full border border-zinc-200 bg-white px-3 py-1 text-[11px] font-semibold text-zinc-600 transition hover:border-zinc-400 focus:outline-none"
+          >
+            <option value="" disabled>
+              Marca-texto
+            </option>
+            {HIGHLIGHT_COLOR_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
 
         <div className="ml-auto flex items-center gap-1">
           {FONT_SIZE_CONTROLS.map((control) => (

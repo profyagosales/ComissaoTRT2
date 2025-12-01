@@ -17,6 +17,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { EnviarTdModal } from '@/src/app/(app)/resumo/ResumoModals'
+import { listaSistemaStyles } from './lista-styles'
 
 type ListasDashboardProps = {
   data: ListasData
@@ -74,28 +75,7 @@ const listaConfig: Record<ListaKey, ListaConfig> = {
 }
 
 const otherApprovalsChipClass = 'border-[#8c6f87] bg-[#8c6f87] text-white'
-const ordemControleStyles: Record<SistemaConcorrencia, { label: string; className: string; numberClassName: string }> = {
-  AC: {
-    label: 'Ampla',
-    className: 'border-[#0a408c] bg-[#0a408c] text-white',
-    numberClassName: 'border-[#0a408c] bg-[#0a408c] text-white',
-  },
-  PCD: {
-    label: 'PCD',
-    className: 'border-[#510a8c] bg-[#510a8c] text-white',
-    numberClassName: 'border-[#510a8c] bg-[#510a8c] text-white',
-  },
-  PPP: {
-    label: 'PPP',
-    className: 'border-[#8c420a] bg-[#8c420a] text-white',
-    numberClassName: 'border-[#8c420a] bg-[#8c420a] text-white',
-  },
-  IND: {
-    label: 'Ind',
-    className: 'border-[#353638] bg-[#353638] text-white',
-    numberClassName: 'border-[#353638] bg-[#353638] text-white',
-  },
-}
+const ordemControleStyles = listaSistemaStyles
 
 const listaButtonColorClass: Record<ListaKey, string> = {
   ordem: 'bg-gradient-to-r from-red-900 via-red-700 to-red-500 text-white',
