@@ -122,7 +122,7 @@ export function VacanciasDashboard({ data }: VacanciasDashboardProps) {
         chipLabel={headerChipLabel}
       />
 
-      <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1.95fr)]">
+      <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
         <VacanciasSummaryCard rows={filteredRows} tipo={tipo} />
         <VacanciasTableCard
           rows={paginatedRows}
@@ -209,7 +209,7 @@ function VacanciasHeaderFilters({
             <div className="relative w-full md:w-64">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#004C3F]" />
               <Input
-                placeholder="Buscar por nome do servidor..."
+                placeholder="Buscar por nome do servidor…"
                 value={search}
                 onChange={(event) => onSearchChange(event.target.value)}
                 className="h-[1.9rem] w-full rounded-full border border-[#c8c8c8] bg-white pl-8 pr-3 text-[11px] font-['Aller'] uppercase tracking-[0.18em] text-[#1f1f1f] focus-visible:border-[#00B388] focus-visible:ring-[#00B388]/30"

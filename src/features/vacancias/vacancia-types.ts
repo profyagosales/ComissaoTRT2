@@ -34,13 +34,13 @@ export const VACANCIA_CLASSE_LABEL: Record<VacanciaClasse, string> = {
 }
 
 export const VACANCIA_CLASSE_HELPER_TEXT: Record<VacanciaClasse, string | null> = {
-  APOSENTADORIA: "",
-  FALECIMENTO: "",
-  DEMISSAO: "",
-  EXONERACAO: "",
+  APOSENTADORIA: null,
+  FALECIMENTO: null,
+  DEMISSAO: null,
+  EXONERACAO: null,
   PCI: "Posse em Cargo Inacumulável",
-  PERDA_POSSE: "",
-  NOMEACAO_SEM_EFEITO: "",
+  PERDA_POSSE: null,
+  NOMEACAO_SEM_EFEITO: null,
 }
 
 export const VACANCIA_TIPO_CHIP_CLASSES: Record<VacanciaTipo, string> = {
@@ -48,7 +48,7 @@ export const VACANCIA_TIPO_CHIP_CLASSES: Record<VacanciaTipo, string> = {
   NAO_ONEROSA: "bg-[#4A4F55] text-white",
 }
 
-export const VACANCIA_CLASSE_CHIP_CLASSES: Record<VacanciaClasse, string> = {
+export const VACANCIA_CLASS_CHIP_CLASSES: Record<VacanciaClasse, string> = {
   APOSENTADORIA: "bg-[#0a408c] text-white",
   FALECIMENTO: "bg-[#510a8c] text-white",
   DEMISSAO: "bg-[#8c420a] text-white",
@@ -57,6 +57,8 @@ export const VACANCIA_CLASSE_CHIP_CLASSES: Record<VacanciaClasse, string> = {
   PERDA_POSSE: "bg-[#FF7A00] text-white",
   NOMEACAO_SEM_EFEITO: "bg-[#B42318] text-white",
 }
+
+export const VACANCIA_CLASSE_CHIP_CLASSES = VACANCIA_CLASS_CHIP_CLASSES
 
 export type VacanciaRow = {
   id: string

@@ -8,7 +8,14 @@ import { Dialog, DialogClose } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { formatDateBrMedium } from "@/lib/date-format"
-import { VACANCIA_CLASSE_LABEL, VACANCIA_CLASSES_BY_TIPO, VACANCIA_TIPO_LABEL, type VacanciaClasse, type VacanciaTipo } from "@/features/vacancias/vacancia-types"
+import {
+  VACANCIA_CLASSE_HELPER_TEXT,
+  VACANCIA_CLASSE_LABEL,
+  VACANCIA_CLASSES_BY_TIPO,
+  VACANCIA_TIPO_LABEL,
+  type VacanciaClasse,
+  type VacanciaTipo,
+} from "@/features/vacancias/vacancia-types"
 import type { VacanciaRecord } from "./loadComissaoData"
 import type { ComissaoDashboardActions } from "./comissao-action-types"
 import { KanbanDialogBody, KanbanDialogContent, KanbanDialogFooter, KanbanDialogHeader } from "./KanbanDialog"
@@ -29,8 +36,19 @@ const VACANCIA_TIPO_OPTIONS: Array<{ value: VacanciaTipo; label: string }> = [
 ]
 
 const VACANCIA_CLASSE_OPTIONS: Record<VacanciaTipo, Array<{ value: VacanciaClasse; label: string }>> = {
-  ONEROSA: VACANCIA_CLASSES_BY_TIPO.ONEROSA.map((value) => ({ value, label: VACANCIA_CLASSE_LABEL[value] })),
-  NAO_ONEROSA: VACANCIA_CLASSES_BY_TIPO.NAO_ONEROSA.map((value) => ({ value, label: VACANCIA_CLASSE_LABEL[value] })),
+  ONEROSA: buildClasseOptions("ONEROSA"),
+  NAO_ONEROSA: buildClasseOptions("NAO_ONEROSA"),
+}
+
+function buildClasseOptions(tipo: VacanciaTipo) {
+  return VACANCIA_CLASSES_BY_TIPO[tipo].map((value) => {
+    const helper = VACANCIA_CLASSE_HELPER_TEXT[value]
+    const baseLabel = VACANCIA_CLASSE_LABEL[value]
+    return {
+      value,
+      label: helper ? `${baseLabel} (${helper})` : baseLabel,
+    }
+  })
 }
 
 type VacanciaFormState = {
@@ -46,6 +64,13 @@ type VacanciaFormState = {
   shouldNotify: boolean
   preenchida: boolean
 }
+
+// TODO: persist `preenchida` once the Supabase `vacancias` table exposes the column.
+
+type VacanciaFormChangeHandler = <Key extends keyof VacanciaFormState>(
+  field: Key,
+  value: VacanciaFormState[Key],
+) => void
 
 const normalizeKey = (value?: string | null) =>
   value
@@ -72,6 +97,14 @@ const inferClasseFromLabel = (value?: string | null): VacanciaClasse | "" => {
   return CLASSE_LABEL_TO_KEY.get(normalized) ?? ""
 }
 
+const resolveClasseLabel = (value?: string | null) => {
+  const classe = inferClasseFromLabel(value)
+  if (classe) {
+    return VACANCIA_CLASSE_LABEL[classe]
+  }
+  return value ?? "—"
+}
+
 const todayInputDate = () => new Date().toISOString().slice(0, 10)
 
 const createVacanciaForm = (): VacanciaFormState => ({
@@ -90,7 +123,7 @@ const createVacanciaForm = (): VacanciaFormState => ({
 
 type VacanciaFormFieldsProps = {
   form: VacanciaFormState
-  onChange: (field: keyof VacanciaFormState, value: string | boolean | null) => void
+  onChange: VacanciaFormChangeHandler
   isPending: boolean
   onDelete?: () => void
 }
@@ -237,14 +270,20 @@ type NovaVacanciaModalProps = {
 
 export function NovaVacanciaModal({ open, onOpenChange, onUpsertVacancia }: NovaVacanciaModalProps) {
   const router = useRouter()
-  const buildForm = () => ({ ...emptyForm })
-  const [form, setForm] = useState(buildForm)
+  const [form, setForm] = useState<VacanciaFormState>(createVacanciaForm)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  const updateForm = (field: keyof typeof emptyForm, value: string | boolean | null) => {
-    setForm((prev) => ({ ...prev, [field]: value }))
+  const updateForm: VacanciaFormChangeHandler = (field, value) => {
+    setForm((prev) => {
+      if (field === "tipo") {
+        return { ...prev, tipo: value as VacanciaTipo | "", classe: "" }
+      }
+      return { ...prev, [field]: value }
+    })
   }
+
+  const resetForm = () => setForm(createVacanciaForm())
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault()
@@ -260,21 +299,31 @@ export function NovaVacanciaModal({ open, onOpenChange, onUpsertVacancia }: Nova
       return
     }
 
+    if (!form.tipo) {
+      setMessage({ type: "error", text: "Selecione o tipo da vacância." })
+      return
+    }
+
+    if (!form.classe) {
+      setMessage({ type: "error", text: "Selecione a classe da vacância." })
+      return
+    }
+
     startTransition(async () => {
       try {
         await onUpsertVacancia({
           data: form.data,
           tribunal: form.tribunal.trim() || "TRT-2",
           cargo: form.cargo.trim(),
-          motivo: form.motivo.trim() || null,
-          tipo: form.tipo.trim() || null,
+          tipo: form.tipo,
+          classe: form.classe,
           nomeServidor: form.nomeServidor.trim() || null,
           douLink: form.douLink.trim() || null,
           observacao: form.observacao.trim() || null,
           shouldNotify: form.shouldNotify,
         })
         setMessage({ type: "success", text: "Vacância registrada." })
-        setForm(buildForm())
+        resetForm()
         router.refresh()
         onOpenChange(false)
       } catch (error) {
@@ -288,7 +337,7 @@ export function NovaVacanciaModal({ open, onOpenChange, onUpsertVacancia }: Nova
     onOpenChange(nextOpen)
     if (!nextOpen) {
       setMessage(null)
-      setForm(buildForm())
+      resetForm()
     }
   }
 
@@ -341,7 +390,7 @@ type VacanciasHistoryModalProps = {
 
 export function VacanciasHistoryModal({ open, onOpenChange, vacancias, onUpsertVacancia, onDeleteVacancia }: VacanciasHistoryModalProps) {
   const router = useRouter()
-  const [form, setForm] = useState({ ...emptyForm })
+  const [form, setForm] = useState<VacanciaFormState>(createVacanciaForm)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -356,22 +405,31 @@ export function VacanciasHistoryModal({ open, onOpenChange, vacancias, onUpsertV
       })
   }, [vacancias])
 
-  const updateForm = (field: keyof typeof emptyForm, value: string | boolean | null) => {
-    setForm((prev) => ({ ...prev, [field]: value }))
+  const updateForm: VacanciaFormChangeHandler = (field, value) => {
+    setForm((prev) => {
+      if (field === "tipo") {
+        return { ...prev, tipo: value as VacanciaTipo | "", classe: "" }
+      }
+      return { ...prev, [field]: value }
+    })
   }
 
   const selectVacancia = (record: VacanciaRecord) => {
     setForm({
       id: record.id,
-      data: record.data ? record.data.slice(0, 10) : "",
+      data: record.data ? record.data.slice(0, 10) : todayInputDate(),
       tribunal: record.tribunal ?? "TRT-2",
-      cargo: record.cargo ?? "",
-      motivo: record.motivo ?? "",
-      tipo: record.tipo ?? "",
+      cargo: record.cargo ?? "TJAA",
+      tipo:
+        inferTipoFromLabel(record.tipo) ||
+        inferTipoFromLabel(record.motivo) ||
+        (record.tipo === "ONEROSA" || record.tipo === "NAO_ONEROSA" ? (record.tipo as VacanciaTipo) : ""),
+      classe: inferClasseFromLabel(record.motivo),
       nomeServidor: record.nomeServidor ?? "",
       douLink: record.douLink ?? "",
       observacao: record.observacao ?? "",
       shouldNotify: false,
+      preenchida: false,
     })
     setMessage(null)
   }
@@ -388,6 +446,16 @@ export function VacanciasHistoryModal({ open, onOpenChange, vacancias, onUpsertV
       return
     }
 
+    if (!form.tipo) {
+      setMessage({ type: "error", text: "Selecione o tipo da vacância." })
+      return
+    }
+
+    if (!form.classe) {
+      setMessage({ type: "error", text: "Selecione a classe da vacância." })
+      return
+    }
+
     startTransition(async () => {
       try {
         await onUpsertVacancia({
@@ -395,8 +463,8 @@ export function VacanciasHistoryModal({ open, onOpenChange, vacancias, onUpsertV
           data: form.data,
           tribunal: form.tribunal,
           cargo: form.cargo,
-          motivo: form.motivo || null,
-          tipo: form.tipo || null,
+          tipo: form.tipo,
+          classe: form.classe,
           nomeServidor: form.nomeServidor || null,
           douLink: form.douLink || null,
           observacao: form.observacao || null,
@@ -418,7 +486,7 @@ export function VacanciasHistoryModal({ open, onOpenChange, vacancias, onUpsertV
       try {
         await onDeleteVacancia({ id: recordId })
         setMessage({ type: "success", text: "Registro removido." })
-        setForm({ ...emptyForm })
+        setForm(createVacanciaForm())
         router.refresh()
       } catch (error) {
         const text = error instanceof Error ? error.message : "Não foi possível remover."
@@ -461,7 +529,7 @@ export function VacanciasHistoryModal({ open, onOpenChange, vacancias, onUpsertV
                     >
                       <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">{record.tribunal ?? "TRT-2"}</p>
                       <p className="text-base font-semibold text-zinc-900">{record.cargo ?? "Cargo"}</p>
-                      <p className="text-xs text-zinc-500">{record.motivo ?? "—"}</p>
+                      <p className="text-xs text-zinc-500">{resolveClasseLabel(record.motivo)}</p>
                       <p className="text-[11px] text-zinc-400">{record.data ? formatDateBrMedium(record.data) : "Sem data"}</p>
                     </button>
                   ))

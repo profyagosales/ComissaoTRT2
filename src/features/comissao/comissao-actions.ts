@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import { TD_REQUEST_TIPOS, mapTipoTdToCandidateStatus } from "@/features/tds/td-types"
 import type { CandidateTdStatus, TdRequestTipo } from "@/features/tds/td-types"
+import { VACANCIA_CLASSE_LABEL, type VacanciaClasse, type VacanciaTipo } from "@/features/vacancias/vacancia-types"
 
 type Decision = "APROVAR" | "REJEITAR"
 
@@ -925,8 +926,9 @@ export async function upsertVacanciaAction(input: {
   data: string
   tribunal: string
   cargo: string
+  classe?: VacanciaClasse | null
   motivo?: string | null
-  tipo?: string | null
+  tipo?: VacanciaTipo | string | null
   nomeServidor?: string | null
   douLink?: string | null
   observacao?: string | null
@@ -953,8 +955,10 @@ export async function upsertVacanciaAction(input: {
   assignFromAliases(vacanciaColumns, payload, VACANCIA_COLUMN_ALIASES.data, dataIso)
   assignFromAliases(vacanciaColumns, payload, VACANCIA_COLUMN_ALIASES.tribunal, tribunal)
   assignFromAliases(vacanciaColumns, payload, VACANCIA_COLUMN_ALIASES.cargo, cargo)
-  assignFromAliases(vacanciaColumns, payload, VACANCIA_COLUMN_ALIASES.motivo, input.motivo?.trim() || null)
-  assignFromAliases(vacanciaColumns, payload, VACANCIA_COLUMN_ALIASES.tipo, input.tipo?.trim() || null)
+  const classeLabel = input.classe ? VACANCIA_CLASSE_LABEL[input.classe] : input.motivo?.trim() || null
+  assignFromAliases(vacanciaColumns, payload, VACANCIA_COLUMN_ALIASES.motivo, classeLabel)
+  const tipoValue = typeof input.tipo === "string" ? input.tipo.trim() : null
+  assignFromAliases(vacanciaColumns, payload, VACANCIA_COLUMN_ALIASES.tipo, tipoValue || null)
   assignFromAliases(
     vacanciaColumns,
     payload,
