@@ -2,7 +2,22 @@
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react"
 import DOMPurify from "dompurify"
-import { Bold, Italic, Underline, List, ListOrdered, Link2, Eraser, type LucideIcon } from "lucide-react"
+import {
+  AlignCenter,
+  AlignJustify,
+  AlignLeft,
+  AlignRight,
+  Bold,
+  Eraser,
+  IndentIncrease,
+  IndentDecrease,
+  Italic,
+  Link2,
+  List,
+  ListOrdered,
+  Underline,
+  type LucideIcon,
+} from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -17,7 +32,20 @@ export type RichTextEditorProps = {
 type ToolbarButton = {
   icon: LucideIcon
   label: string
-  command: "bold" | "italic" | "underline" | "insertUnorderedList" | "insertOrderedList" | "createLink" | "removeFormat"
+  command:
+    | "bold"
+    | "italic"
+    | "underline"
+    | "insertUnorderedList"
+    | "insertOrderedList"
+    | "createLink"
+    | "removeFormat"
+    | "justifyLeft"
+    | "justifyCenter"
+    | "justifyRight"
+    | "justifyFull"
+    | "indent"
+    | "outdent"
   needsValue?: boolean
 }
 
@@ -39,6 +67,12 @@ const TOOLBAR_BUTTONS: ToolbarButton[] = [
   { icon: Underline, label: "Sublinhado", command: "underline" },
   { icon: List, label: "Lista", command: "insertUnorderedList" },
   { icon: ListOrdered, label: "Lista numerada", command: "insertOrderedList" },
+  { icon: AlignLeft, label: "Alinhar à esquerda", command: "justifyLeft" },
+  { icon: AlignCenter, label: "Centralizar", command: "justifyCenter" },
+  { icon: AlignRight, label: "Alinhar à direita", command: "justifyRight" },
+  { icon: AlignJustify, label: "Justificar", command: "justifyFull" },
+  { icon: IndentIncrease, label: "Aumentar recuo", command: "indent" },
+  { icon: IndentDecrease, label: "Diminuir recuo", command: "outdent" },
   { icon: Link2, label: "Inserir link", command: "createLink", needsValue: true },
   { icon: Eraser, label: "Limpar formatação", command: "removeFormat" },
 ]

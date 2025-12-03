@@ -151,15 +151,21 @@ const TD_MODELS_FOLDER = "td-models"
 
 const createClientId = () => (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`)
 
-const mapContentToForm = (content: TdContentSettings): TdContentFormState => ({
-  howItWorksHtml: content.howItWorksHtml || TD_CONTENT_DEFAULTS.howItWorksHtml,
-  guidelinesHtml: content.guidelinesHtml || TD_CONTENT_DEFAULTS.guidelinesHtml,
-  models: (content.models ?? []).map((model, index) => ({
-    clientId: createClientId() + index,
-    label: model.label,
-    url: model.url,
-  })),
-})
+const mapContentToForm = (content: TdContentSettings): TdContentFormState => {
+  const models = (content.models ?? [])
+    .slice(0, 1)
+    .map((model, index) => ({ clientId: createClientId() + index, label: model.label, url: model.url }))
+
+  if (!models.length) {
+    models.push({ clientId: createClientId(), label: "", url: "" })
+  }
+
+  return {
+    howItWorksHtml: content.howItWorksHtml || TD_CONTENT_DEFAULTS.howItWorksHtml,
+    guidelinesHtml: content.guidelinesHtml || TD_CONTENT_DEFAULTS.guidelinesHtml,
+    models,
+  }
+}
 
 const stripHtml = (html: string) => html.replace(/<[^>]+>/g, "").trim()
 
@@ -180,20 +186,29 @@ export function TdContentEditorModal({ open, onOpenChange, content, onUpsertTdCo
   const [uploadState, setUploadState] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [fileInput, setFileInput] = useState<HTMLInputElement | null>(null)
+  const primaryModel = form.models[0]
 
   const setFileInputRef = (element: HTMLInputElement | null) => {
     setFileInput(element)
   }
 
-  const handleModelLabelChange = (clientId: string, label: string) => {
-    setForm((prev) => ({
-      ...prev,
-      models: prev.models.map((model) => (model.clientId === clientId ? { ...model, label } : model)),
-    }))
+  const handleModelLabelChange = (label: string) => {
+    setForm((prev) => {
+      const current = prev.models[0]
+      if (current) {
+        return { ...prev, models: [{ ...current, label }] }
+      }
+      return { ...prev, models: [{ clientId: createClientId(), label, url: "" }] }
+    })
   }
 
-  const removeModel = (clientId: string) => {
-    setForm((prev) => ({ ...prev, models: prev.models.filter((model) => model.clientId !== clientId) }))
+  const handleRemoveModelFile = () => {
+    setForm((prev) => {
+      const current = prev.models[0]
+      if (!current) return prev
+      return { ...prev, models: [{ ...current, url: "" }] }
+    })
+    setUploadState(null)
   }
 
   const handleUploadClick = () => {
@@ -210,7 +225,15 @@ export function TdContentEditorModal({ open, onOpenChange, content, onUpsertTdCo
 
     try {
       const uploadedModel = await uploadModelFile(file)
-      setForm((prev) => ({ ...prev, models: [...prev.models, uploadedModel] }))
+      setForm((prev) => {
+        const current = prev.models[0]
+        const nextModel: EditableModel = {
+          clientId: current?.clientId ?? uploadedModel.clientId,
+          label: current?.label?.trim() ? current.label : uploadedModel.label,
+          url: uploadedModel.url,
+        }
+        return { ...prev, models: [nextModel] }
+      })
       setUploadState({ type: "success", text: "Arquivo enviado. Ajuste o rótulo se necessário." })
     } catch (error) {
       const message = error instanceof Error ? error.message : "Não foi possível enviar o arquivo."
@@ -315,84 +338,76 @@ export function TdContentEditorModal({ open, onOpenChange, content, onUpsertTdCo
               </div>
 
               <div className="space-y-2">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Modelos de TD</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      ref={setFileInputRef}
-                      type="file"
-                      accept=".pdf,.doc,.docx,.odt"
-                      className="hidden"
-                      onChange={handleFileSelected}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={handleUploadClick}
-                      disabled={isUploading}
-                      className="rounded-full border-amber-200 text-amber-700 hover:border-amber-300"
-                    >
-                      {isUploading ? "Enviando..." : "Enviar arquivo de modelo"}
-                    </Button>
-                  </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Modelo de TD</label>
+                  <p className="text-[11px] text-zinc-500">Configure o rótulo exibido e envie apenas um arquivo.</p>
                 </div>
+
+                <input
+                  ref={setFileInputRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,.odt"
+                  className="hidden"
+                  onChange={handleFileSelected}
+                />
 
                 {uploadState ? <MessageBanner state={uploadState} /> : null}
 
-                <div className="space-y-3">
-                  {form.models.length ? (
-                    form.models.map((model) => (
-                      <div key={model.clientId} className="space-y-2 rounded-2xl border border-zinc-100 bg-white/90 p-3">
-                        <div className="space-y-1">
-                          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Rótulo exibido</label>
-                          <Input
-                            value={model.label}
-                            onChange={(event) => handleModelLabelChange(model.clientId, event.target.value)}
-                            placeholder="Modelo TD - Ampla / PPP (PDF)"
-                          />
+                <div className="space-y-3 rounded-2xl border border-zinc-100 bg-white/95 p-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Rótulo exibido</label>
+                    <RichTextEditor
+                      value={primaryModel?.label ?? ""}
+                      onChange={(value) => handleModelLabelChange(value)}
+                      placeholder="Descreva o rótulo exibido para o modelo"
+                      ariaLabel="Rótulo exibido do modelo de TD"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Arquivo do modelo</label>
+                    {primaryModel?.url ? (
+                      <div className="space-y-2 rounded-2xl border border-dashed border-rose-200 bg-rose-50/60 px-3 py-2 text-xs text-rose-900">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="truncate">{prettyFileName(primaryModel.url)}</span>
+                          <div className="flex items-center gap-3">
+                            <a
+                              href={primaryModel.url}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              className="text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-700"
+                            >
+                              Abrir
+                            </a>
+                            <button
+                              type="button"
+                              onClick={handleRemoveModelFile}
+                              className="text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-500 hover:text-rose-700"
+                            >
+                              Remover
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-dashed border-rose-200 bg-rose-50/60 px-3 py-2 text-xs text-rose-900">
-                          <span className="truncate">{prettyFileName(model.url)}</span>
-                          <a
-                            href={model.url}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                            className="text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-700"
-                          >
-                            Abrir
-                          </a>
-                        </div>
-                        <div className="flex justify-end">
-                          <button
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border-2 border-dashed border-rose-200 bg-rose-50/60 px-4 py-4 text-center text-rose-900">
+                        <p className="text-sm">Nenhum arquivo enviado.</p>
+                        <p className="mt-1 text-[11px] text-rose-700">Envie um PDF, DOC, DOCX ou ODT.</p>
+                        <div className="mt-3 flex justify-center">
+                          <Button
                             type="button"
-                            onClick={() => removeModel(model.clientId)}
-                            className="text-xs font-semibold text-zinc-400 hover:text-red-600"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleUploadClick}
+                            disabled={isUploading}
+                            className="rounded-full border-rose-200 bg-white text-rose-700 hover:border-rose-300"
                           >
-                            Remover
-                          </button>
+                            {isUploading ? "Enviando..." : "Selecionar arquivo"}
+                          </Button>
                         </div>
                       </div>
-                    ))
-                  ) : (
-                    <div className="rounded-2xl border-2 border-dashed border-rose-200 bg-rose-50/60 px-4 py-6 text-center">
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-600">Modelo de TD</p>
-                      <p className="mt-2 text-sm text-rose-900">Envie o primeiro arquivo em PDF, DOC ou DOCX.</p>
-                      <div className="mt-4 flex justify-center">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={handleUploadClick}
-                          disabled={isUploading}
-                          className="rounded-full border-rose-200 bg-white text-rose-700 hover:border-rose-300"
-                        >
-                          {isUploading ? "Enviando..." : "Selecionar arquivo"}
-                        </Button>
-                      </div>
-                      <p className="mt-2 text-[11px] text-rose-700">Tamanho máximo conforme limite do Supabase Storage.</p>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
 

@@ -8,6 +8,7 @@ import { Dialog, DialogClose } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { formatDateBrMedium } from "@/lib/date-format"
+import { VACANCIA_CLASSE_LABEL, VACANCIA_CLASSES_BY_TIPO, VACANCIA_TIPO_LABEL, type VacanciaClasse, type VacanciaTipo } from "@/features/vacancias/vacancia-types"
 import type { VacanciaRecord } from "./loadComissaoData"
 import type { ComissaoDashboardActions } from "./comissao-action-types"
 import { KanbanDialogBody, KanbanDialogContent, KanbanDialogFooter, KanbanDialogHeader } from "./KanbanDialog"
@@ -22,28 +23,82 @@ function MessageBanner({ state }: { state: { type: "success" | "error"; text: st
 
   return <p className={cn("rounded-2xl border px-3 py-2 text-sm", colorClasses)}>{state.text}</p>
 }
+const VACANCIA_TIPO_OPTIONS: Array<{ value: VacanciaTipo; label: string }> = [
+  { value: "ONEROSA", label: VACANCIA_TIPO_LABEL.ONEROSA },
+  { value: "NAO_ONEROSA", label: VACANCIA_TIPO_LABEL.NAO_ONEROSA },
+]
 
-const emptyForm = {
-  id: null as string | null,
-  data: "",
+const VACANCIA_CLASSE_OPTIONS: Record<VacanciaTipo, Array<{ value: VacanciaClasse; label: string }>> = {
+  ONEROSA: VACANCIA_CLASSES_BY_TIPO.ONEROSA.map((value) => ({ value, label: VACANCIA_CLASSE_LABEL[value] })),
+  NAO_ONEROSA: VACANCIA_CLASSES_BY_TIPO.NAO_ONEROSA.map((value) => ({ value, label: VACANCIA_CLASSE_LABEL[value] })),
+}
+
+type VacanciaFormState = {
+  id: string | null
+  data: string
+  tribunal: string
+  cargo: string
+  tipo: VacanciaTipo | ""
+  classe: VacanciaClasse | ""
+  nomeServidor: string
+  douLink: string
+  observacao: string
+  shouldNotify: boolean
+  preenchida: boolean
+}
+
+const normalizeKey = (value?: string | null) =>
+  value
+    ?.normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z]/g, "") ?? ""
+
+const CLASSE_LABEL_TO_KEY = new Map<string, VacanciaClasse>(
+  Object.entries(VACANCIA_CLASSE_LABEL).map(([key, label]) => [normalizeKey(label), key as VacanciaClasse]),
+)
+
+const inferTipoFromLabel = (value?: string | null): VacanciaTipo | "" => {
+  const normalized = normalizeKey(value)
+  if (!normalized) return ""
+  if (normalized.includes("NAO")) return "NAO_ONEROSA"
+  if (normalized.includes("ONER")) return "ONEROSA"
+  return ""
+}
+
+const inferClasseFromLabel = (value?: string | null): VacanciaClasse | "" => {
+  const normalized = normalizeKey(value)
+  if (!normalized) return ""
+  return CLASSE_LABEL_TO_KEY.get(normalized) ?? ""
+}
+
+const todayInputDate = () => new Date().toISOString().slice(0, 10)
+
+const createVacanciaForm = (): VacanciaFormState => ({
+  id: null,
+  data: todayInputDate(),
   tribunal: "TRT-2",
-  cargo: "",
-  motivo: "",
+  cargo: "TJAA",
   tipo: "",
+  classe: "",
   nomeServidor: "",
   douLink: "",
   observacao: "",
   shouldNotify: true,
-}
+  preenchida: false,
+})
 
 type VacanciaFormFieldsProps = {
-  form: typeof emptyForm
-  onChange: (field: keyof typeof emptyForm, value: string | boolean | null) => void
+  form: VacanciaFormState
+  onChange: (field: keyof VacanciaFormState, value: string | boolean | null) => void
   isPending: boolean
   onDelete?: () => void
 }
 
 function VacanciaFormFields({ form, onChange, isPending, onDelete }: VacanciaFormFieldsProps) {
+  const classeOptions = form.tipo ? VACANCIA_CLASSE_OPTIONS[form.tipo] : []
+  const preenchidaGroupName = `preenchida-${form.id ?? "nova"}`
+
   return (
     <div className="space-y-4 text-sm">
       <div className="grid gap-4 md:grid-cols-2">
@@ -53,25 +108,52 @@ function VacanciaFormFields({ form, onChange, isPending, onDelete }: VacanciaFor
         </div>
         <div className="space-y-1">
           <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Tribunal</label>
-          <Input value={form.tribunal} onChange={(event) => onChange("tribunal", event.target.value)} placeholder="TRT-2" />
+          <Input
+            value={form.tribunal}
+            readOnly
+            className="bg-zinc-100 text-zinc-500"
+          />
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-1">
           <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Cargo</label>
-          <Input value={form.cargo} onChange={(event) => onChange("cargo", event.target.value)} placeholder="TJAA" />
+          <Input value={form.cargo} readOnly className="bg-zinc-100 text-zinc-500" />
         </div>
         <div className="space-y-1">
           <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Tipo</label>
-          <Input value={form.tipo} onChange={(event) => onChange("tipo", event.target.value)} placeholder="Ex.: exoneração" />
+          <select
+            value={form.tipo}
+            onChange={(event) => onChange("tipo", event.target.value as VacanciaTipo | "")}
+            className="h-[2.25rem] w-full rounded-2xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 focus:border-red-400 focus:outline-none"
+          >
+            <option value="">Selecione...</option>
+            {VACANCIA_TIPO_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-1">
-          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Motivo</label>
-          <Input value={form.motivo} onChange={(event) => onChange("motivo", event.target.value)} placeholder="Opcional" />
+          <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Classe</label>
+          <select
+            value={form.classe}
+            onChange={(event) => onChange("classe", event.target.value as VacanciaClasse | "")}
+            disabled={!form.tipo}
+            className="h-[2.25rem] w-full rounded-2xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400 focus:border-red-400 focus:outline-none"
+          >
+            <option value="">{form.tipo ? "Selecione a classe" : "Selecione o tipo primeiro"}</option>
+            {classeOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="space-y-1">
           <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Servidor</label>
@@ -93,6 +175,32 @@ function VacanciaFormFields({ form, onChange, isPending, onDelete }: VacanciaFor
           className="w-full rounded-2xl border border-zinc-200 bg-white/80 px-3 py-2 text-sm text-zinc-900 focus:border-red-400 focus:outline-none"
           placeholder="Detalhes adicionais"
         />
+      </div>
+
+      <div className="space-y-1">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">A vacância já foi preenchida?</p>
+        <div className="flex gap-3">
+          <label className="inline-flex items-center gap-2 rounded-full border border-zinc-200 px-3 py-1 text-xs font-semibold text-zinc-700">
+            <input
+              type="radio"
+              name={preenchidaGroupName}
+              value="SIM"
+              checked={form.preenchida}
+              onChange={() => onChange("preenchida", true)}
+            />
+            Sim
+          </label>
+          <label className="inline-flex items-center gap-2 rounded-full border border-zinc-200 px-3 py-1 text-xs font-semibold text-zinc-700">
+            <input
+              type="radio"
+              name={preenchidaGroupName}
+              value="NAO"
+              checked={!form.preenchida}
+              onChange={() => onChange("preenchida", false)}
+            />
+            Não
+          </label>
+        </div>
       </div>
 
       <label className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-600">

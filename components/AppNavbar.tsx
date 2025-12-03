@@ -47,8 +47,8 @@ export function AppNavbar({ isComissao = false }: { isComissao?: boolean }) {
             </div>
 
             <div className="leading-tight text-white">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-red-100/90">
-                Comissão TJAA · TRT-2
+              <p className="text-sm font-semibold md:text-base">
+                APROVADOS TJAA · TRT-2
               </p>
               <p className="text-sm font-semibold md:text-base">Painel do aprovado</p>
             </div>
