@@ -38,7 +38,9 @@ export async function loadTdsData(): Promise<TdsData> {
   return { items, content }
 }
 
-async function fetchTdContentSettings(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>): Promise<TdContentSettings> {
+export async function fetchTdContentSettings(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+): Promise<TdContentSettings> {
   const contentResult = await supabase
     .from("td_content_settings")
     .select("content")

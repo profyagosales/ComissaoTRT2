@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
+import type React from "react"
 import type { ReactNode } from "react"
 import { useRouter } from "next/navigation"
 
@@ -8,6 +9,15 @@ import { Dialog, DialogClose } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { KanbanDialogBody, KanbanDialogContent, KanbanDialogFooter, KanbanDialogHeader } from "./KanbanDialog"
+import { useToast } from "@/components/ui/toast-provider"
+import {
+  getComissaoResumoConfig,
+  removeComissaoLogo,
+  updateComissaoResumoConfig,
+  uploadComissaoLogo,
+} from "./comissao-resumo-actions"
+import type { ComissaoResumoConfig, ComissaoResumoUpdateInput } from "./comissao-resumo-types"
+import { getCommissionLogoRelativeUrl } from "./logo-utils"
 import type {
   CargosVagosRecord,
   CsjtAuthorizationRecord,
@@ -30,6 +40,565 @@ function MessageBanner({ state }: { state: MessageState }) {
     <p className={cn("rounded-2xl border px-3 py-2 text-sm", colorClasses)}>{state.text}</p>
   )
 }
+
+type ComissaoLogoModalProps = {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}
+
+export function ComissaoLogoModal({ open, onOpenChange }: ComissaoLogoModalProps) {
+  const router = useRouter()
+  const { showToast } = useToast()
+  const [config, setConfig] = useState<ComissaoResumoConfig | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [message, setMessage] = useState<MessageState>(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [isPending, startTransition] = useTransition()
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const previewUrlRef = useRef<string | null>(null)
+
+  const resetSelection = () => {
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current)
+      previewUrlRef.current = null
+    }
+    setSelectedFile(null)
+    setPreviewUrl(null)
+    setMessage(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+  }
+
+  const loadConfig = async () => {
+    setIsLoading(true)
+    setMessage(null)
+    try {
+      const data = await getComissaoResumoConfig()
+      setConfig(data)
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "Não foi possível carregar os dados da comissão."
+      setMessage({ type: "error", text })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    loadConfig()
+    resetSelection()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current)
+        previewUrlRef.current = null
+      }
+    }
+  }, [])
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    resetSelection()
+
+    if (!file) {
+      return
+    }
+
+    const objectUrl = URL.createObjectURL(file)
+    const validationImage = new Image()
+
+    validationImage.onload = () => {
+      const { width, height } = validationImage
+
+      if (width !== height) {
+        URL.revokeObjectURL(objectUrl)
+        setMessage({
+          type: "error",
+          text: "Envie uma imagem quadrada (mesma largura e altura) para usar como ícone.",
+        })
+        return
+      }
+
+      if (width < 512) {
+        URL.revokeObjectURL(objectUrl)
+        setMessage({
+          type: "error",
+          text: "A logo precisa ter pelo menos 512x512 pixels para ser usada como ícone do app.",
+        })
+        return
+      }
+
+      previewUrlRef.current = objectUrl
+      setSelectedFile(file)
+      setPreviewUrl(objectUrl)
+      setMessage({
+        type: "success",
+        text: `Imagem validada (${width}x${height}).`,
+      })
+    }
+
+    validationImage.onerror = () => {
+      URL.revokeObjectURL(objectUrl)
+      setMessage({
+        type: "error",
+        text: "Não foi possível ler a imagem. Tente enviar outro arquivo em PNG ou JPG.",
+      })
+    }
+
+    validationImage.src = objectUrl
+  }
+
+  const handleSave = (event: React.FormEvent) => {
+    event.preventDefault()
+    setMessage(null)
+
+    if (!selectedFile) {
+      setMessage({ type: "error", text: "Selecione um arquivo de logo para enviar." })
+      return
+    }
+
+    startTransition(async () => {
+      try {
+        await uploadComissaoLogo(selectedFile)
+        showToast("Logo atualizada com sucesso.", { variant: "success" })
+        resetSelection()
+        onOpenChange(false)
+        router.refresh()
+      } catch (error) {
+        const text = error instanceof Error ? error.message : "Erro ao salvar a nova logo."
+        setMessage({ type: "error", text })
+      }
+    })
+  }
+
+  const handleRemove = () => {
+    setMessage(null)
+    startTransition(async () => {
+      try {
+        await removeComissaoLogo()
+        showToast("Logo removida.", { variant: "success" })
+        resetSelection()
+        onOpenChange(false)
+        router.refresh()
+      } catch (error) {
+        const text = error instanceof Error ? error.message : "Erro ao remover a logo."
+        setMessage({ type: "error", text })
+      }
+    })
+  }
+
+  const currentLogoUrl = previewUrl ?? getCommissionLogoRelativeUrl(config)
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <KanbanDialogContent size="medium">
+        <form onSubmit={handleSave} className="flex h-full min-h-0 flex-col">
+          <KanbanDialogHeader
+            title="Logo da comissão"
+            description="Atualize a marca que aparece no resumo do concurso. Recomenda-se usar imagem quadrada (PNG)."
+          />
+
+          <KanbanDialogBody className="space-y-6">
+            <div>
+              <p className={sectionTitleClasses}>Pré-visualização</p>
+              <div className="mt-2 flex items-center justify-center">
+                <div className="flex h-40 w-40 items-center justify-center rounded-3xl border border-[#0f2f47]/12 bg-white/80 p-4 shadow-sm">
+                  {isLoading ? (
+                    <span className="text-sm text-[#0f2f47]/60">Carregando...</span>
+                  ) : currentLogoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={currentLogoUrl} alt="Logo da comissão" className="max-h-full max-w-full object-contain" />
+                  ) : (
+                    <span className="text-center text-xs text-[#0f2f47]/50">
+                      Nenhuma logo cadastrada.
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className={sectionTitleClasses}>Selecionar arquivo</label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/jpg"
+                onChange={handleFileChange}
+                className="w-full rounded-2xl border border-[#0f2f47]/14 bg-white px-3 py-2 text-sm text-[#0f2f47]"
+              />
+              <p className="text-xs text-[#0f2f47]/60">Use uma imagem quadrada (mínimo 512x512, preferencialmente PNG com fundo transparente).</p>
+            </div>
+
+            <MessageBanner state={message} />
+          </KanbanDialogBody>
+
+          <KanbanDialogFooter>
+            <DialogClose asChild>
+              <button
+                type="button"
+                className="rounded-full border border-[#0f2f47]/15 px-4 py-2 text-sm font-semibold text-[#0f2f47]/70 transition hover:border-[#0f2f47]/30 hover:text-[#0f2f47]"
+              >
+                Cancelar
+              </button>
+            </DialogClose>
+            {config?.logo_url ? (
+              <button
+                type="button"
+                onClick={handleRemove}
+                disabled={isPending}
+                className="rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:border-red-300 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Remover logo
+              </button>
+            ) : null}
+            <button
+              type="submit"
+              disabled={isPending || !selectedFile}
+              className="rounded-full bg-[#0067A0] px-6 py-2 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(0,58,96,0.25)] transition hover:bg-[#005885] disabled:cursor-not-allowed disabled:bg-[#0067A0]/60"
+            >
+              {isPending ? "Salvando..." : "Salvar logo"}
+            </button>
+          </KanbanDialogFooter>
+        </form>
+      </KanbanDialogContent>
+    </Dialog>
+  )
+}
+
+type ValidadeFormState = {
+  homologadoEm: string
+  validoAte: string
+  foiProrrogado: boolean
+  prorrogadoEm: string
+  validoAteProrrogado: string
+}
+
+type ComissaoValidadeModalProps = {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}
+
+export function ComissaoValidadeModal({ open, onOpenChange }: ComissaoValidadeModalProps) {
+  const router = useRouter()
+  const { showToast } = useToast()
+  const [form, setForm] = useState<ValidadeFormState>({
+    homologadoEm: "",
+    validoAte: "",
+    foiProrrogado: false,
+    prorrogadoEm: "",
+    validoAteProrrogado: "",
+  })
+  const [message, setMessage] = useState<MessageState>(null)
+  const [isPending, startTransition] = useTransition()
+
+  const loadConfig = async () => {
+    setMessage(null)
+    try {
+      const data = await getComissaoResumoConfig()
+      setForm({
+        homologadoEm: data.homologado_em?.slice(0, 10) ?? "",
+        validoAte: data.valido_ate?.slice(0, 10) ?? "",
+        foiProrrogado: Boolean(data.foi_prorrogado),
+        prorrogadoEm: data.prorrogado_em?.slice(0, 10) ?? "",
+        validoAteProrrogado: data.valido_ate_prorrogado?.slice(0, 10) ?? "",
+      })
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "Não foi possível carregar as datas atuais."
+      setMessage({ type: "error", text })
+    }
+  }
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    loadConfig()
+  }, [open])
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault()
+    setMessage(null)
+
+    if (form.foiProrrogado) {
+      if (!form.prorrogadoEm || !form.validoAteProrrogado) {
+        setMessage({ type: "error", text: "Informe as datas de prorrogação." })
+        return
+      }
+    }
+
+    startTransition(async () => {
+      try {
+        await updateComissaoResumoConfig({
+          homologado_em: form.homologadoEm || null,
+          valido_ate: form.validoAte || null,
+          foi_prorrogado: form.foiProrrogado,
+          prorrogado_em: form.foiProrrogado ? form.prorrogadoEm || null : null,
+          valido_ate_prorrogado: form.foiProrrogado ? form.validoAteProrrogado || null : null,
+        })
+        showToast("Validade atualizada.", { variant: "success" })
+        onOpenChange(false)
+        router.refresh()
+      } catch (error) {
+        const text = error instanceof Error ? error.message : "Erro ao atualizar a validade."
+        setMessage({ type: "error", text })
+      }
+    })
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <KanbanDialogContent size="medium">
+        <form onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col">
+          <KanbanDialogHeader
+            title="Validade do concurso"
+            description="Registre as datas de homologação, validade e eventuais prorrogações."
+          />
+
+          <KanbanDialogBody className="space-y-5">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-1">
+                <label className={sectionTitleClasses}>Homologado em</label>
+                <Input
+                  type="date"
+                  value={form.homologadoEm}
+                  onChange={(event) => setForm(prev => ({ ...prev, homologadoEm: event.target.value }))}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className={sectionTitleClasses}>Válido até</label>
+                <Input
+                  type="date"
+                  value={form.validoAte}
+                  onChange={(event) => setForm(prev => ({ ...prev, validoAte: event.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className={sectionTitleClasses}>Já foi prorrogado?</label>
+              <div className="flex gap-2 text-sm">
+                <button
+                  type="button"
+                  onClick={() => setForm(prev => ({ ...prev, foiProrrogado: true }))}
+                  className={cn(
+                    "inline-flex flex-1 items-center justify-center rounded-2xl border px-3 py-2",
+                    form.foiProrrogado ? "border-[#0067A0] bg-[#0067A0]/10 text-[#0067A0]" : "border-[#0f2f47]/12 bg-white text-[#0f2f47]/70"
+                  )}
+                >
+                  Sim
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm(prev => ({ ...prev, foiProrrogado: false, prorrogadoEm: "", validoAteProrrogado: "" }))}
+                  className={cn(
+                    "inline-flex flex-1 items-center justify-center rounded-2xl border px-3 py-2",
+                    !form.foiProrrogado ? "border-[#0067A0] bg-[#0067A0]/10 text-[#0067A0]" : "border-[#0f2f47]/12 bg-white text-[#0f2f47]/70"
+                  )}
+                >
+                  Não
+                </button>
+              </div>
+            </div>
+
+            {form.foiProrrogado ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-1">
+                  <label className={sectionTitleClasses}>Prorrogado em</label>
+                  <Input
+                    type="date"
+                    value={form.prorrogadoEm}
+                    onChange={(event) => setForm(prev => ({ ...prev, prorrogadoEm: event.target.value }))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className={sectionTitleClasses}>Válido até (após prorrogação)</label>
+                  <Input
+                    type="date"
+                    value={form.validoAteProrrogado}
+                    onChange={(event) => setForm(prev => ({ ...prev, validoAteProrrogado: event.target.value }))}
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            <MessageBanner state={message} />
+          </KanbanDialogBody>
+
+          <KanbanDialogFooter>
+            <DialogClose asChild>
+              <button
+                type="button"
+                className="rounded-full border border-[#0f2f47]/15 px-4 py-2 text-sm font-semibold text-[#0f2f47]/70 transition hover:border-[#0f2f47]/30 hover:text-[#0f2f47]"
+              >
+                Cancelar
+              </button>
+            </DialogClose>
+            <button
+              type="submit"
+              disabled={isPending}
+              className="rounded-full bg-[#0067A0] px-6 py-2 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(0,58,96,0.25)] transition hover:bg-[#005885] disabled:cursor-not-allowed disabled:bg-[#0067A0]/60"
+            >
+              {isPending ? "Salvando..." : "Salvar validade"}
+            </button>
+          </KanbanDialogFooter>
+        </form>
+      </KanbanDialogContent>
+    </Dialog>
+  )
+}
+
+type SimpleFieldModalProps = {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  fieldKey: keyof Pick<ComissaoResumoConfig, "instagram_url" | "email_comissao" | "grupo_aprovados_url">
+  title: string
+  description: string
+  placeholder: string
+  successMessage: string
+  label: string
+}
+
+function SimpleFieldModal({
+  open,
+  onOpenChange,
+  fieldKey,
+  title,
+  description,
+  placeholder,
+  successMessage,
+  label,
+}: SimpleFieldModalProps) {
+  const router = useRouter()
+  const { showToast } = useToast()
+  const [value, setValue] = useState("")
+  const [message, setMessage] = useState<MessageState>(null)
+  const [isPending, startTransition] = useTransition()
+
+  const loadConfig = async () => {
+    setMessage(null)
+    try {
+      const data = await getComissaoResumoConfig()
+      const current = data[fieldKey]
+      setValue(typeof current === "string" ? current : "")
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "Não foi possível carregar a configuração."
+      setMessage({ type: "error", text })
+    }
+  }
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    loadConfig()
+  }, [open])
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault()
+    setMessage(null)
+
+    startTransition(async () => {
+      try {
+        const payload: ComissaoResumoUpdateInput = {
+          [fieldKey]: value.trim() || null,
+        } as ComissaoResumoUpdateInput
+
+        await updateComissaoResumoConfig(payload)
+        showToast(successMessage, { variant: "success" })
+        onOpenChange(false)
+        router.refresh()
+      } catch (error) {
+        const text = error instanceof Error ? error.message : "Erro ao salvar informações."
+        setMessage({ type: "error", text })
+      }
+    })
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <KanbanDialogContent size="narrow">
+        <form onSubmit={handleSubmit} className="flex h-full flex-col">
+          <KanbanDialogHeader title={title} description={description} />
+
+          <KanbanDialogBody className="space-y-4">
+            <div className="space-y-1">
+              <label className={sectionTitleClasses}>{label}</label>
+              <Input
+                value={value}
+                onChange={(event) => setValue(event.target.value)}
+                placeholder={placeholder}
+              />
+            </div>
+
+            <MessageBanner state={message} />
+          </KanbanDialogBody>
+
+          <KanbanDialogFooter>
+            <DialogClose asChild>
+              <button
+                type="button"
+                className="rounded-full border border-[#0f2f47]/15 px-4 py-2 text-sm font-semibold text-[#0f2f47]/70 transition hover:border-[#0f2f47]/30 hover:text-[#0f2f47]"
+              >
+                Cancelar
+              </button>
+            </DialogClose>
+            <button
+              type="submit"
+              disabled={isPending}
+              className="rounded-full bg-[#0067A0] px-6 py-2 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(0,58,96,0.25)] transition hover:bg-[#005885] disabled:cursor-not-allowed disabled:bg-[#0067A0]/60"
+            >
+              {isPending ? "Salvando..." : "Salvar"}
+            </button>
+          </KanbanDialogFooter>
+        </form>
+      </KanbanDialogContent>
+    </Dialog>
+  )
+}
+
+export const ComissaoInstagramModal = (props: { open: boolean; onOpenChange: (open: boolean) => void }) => (
+  <SimpleFieldModal
+    fieldKey="instagram_url"
+    title="Instagram da comissão"
+    description="Informe o link público do perfil da comissão."
+    placeholder="https://instagram.com/comissao"
+    successMessage="Instagram atualizado."
+    label="URL do Instagram"
+    {...props}
+  />
+)
+
+export const ComissaoEmailModal = (props: { open: boolean; onOpenChange: (open: boolean) => void }) => (
+  <SimpleFieldModal
+    fieldKey="email_comissao"
+    title="E-mail da comissão"
+    description="Defina o endereço de e-mail oficial para contato."
+    placeholder="comissao@trt2.jus.br"
+    successMessage="E-mail atualizado."
+    label="Endereço de e-mail"
+    {...props}
+  />
+)
+
+export const ComissaoGrupoModal = (props: { open: boolean; onOpenChange: (open: boolean) => void }) => (
+  <SimpleFieldModal
+    fieldKey="grupo_aprovados_url"
+    title="Grupo de aprovados"
+    description="Indique o link do grupo de aprovados (WhatsApp, Telegram etc.)."
+    placeholder="https://chat.whatsapp.com/..."
+    successMessage="Link do grupo atualizado."
+    label="Link do grupo"
+    {...props}
+  />
+)
 
 type LoaFormState = {
   id?: string

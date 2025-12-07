@@ -21,7 +21,7 @@ export function UltimasNotificacoesCard({ notificacoes }: Props) {
     <>
       <div className="w-full h-[420px] rounded-[28px] bg-white/90 ring-1 ring-black/5 shadow-md shadow-black/10 flex flex-col overflow-hidden">
         <div className="bg-[#C62828] px-6 py-4 flex flex-col items-center justify-center text-center gap-1">
-          <p className="text-xs font-semibold tracking-[0.15em] uppercase text-white">Últimas notificações</p>
+          <p className="font-display text-xs tracking-[0.18em] uppercase text-white">Últimas notificações</p>
         </div>
 
         <div className="flex-1 px-4 py-4 overflow-y-auto">
@@ -42,7 +42,7 @@ export function UltimasNotificacoesCard({ notificacoes }: Props) {
                       className="w-full rounded-2xl px-3 py-3 hover:bg-slate-50 transition flex flex-col gap-2 border border-transparent hover:border-slate-200 text-center"
                     >
                       <div className="flex flex-col items-center gap-1">
-                        <p className="text-sm font-semibold text-slate-900 line-clamp-2">{n.titulo}</p>
+                        <p className="font-display text-sm uppercase tracking-[0.12em] text-slate-900 line-clamp-2">{n.titulo}</p>
                         {n.created_at && (
                           <span className="text-[11px] text-slate-400">
                             {new Date(n.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
@@ -70,8 +70,8 @@ export function UltimasNotificacoesCard({ notificacoes }: Props) {
               Fechar
             </button>
 
-            <p className="text-xs font-semibold tracking-[0.18em] uppercase text-[#C62828] mb-2">Notificação</p>
-            <h2 className="text-lg font-semibold text-slate-900 mb-2">{aberta.titulo}</h2>
+            <p className="font-display text-xs tracking-[0.18em] uppercase text-[#C62828] mb-2">Notificação</p>
+            <h2 className="font-display text-lg uppercase tracking-[0.16em] text-slate-900 mb-2">{aberta.titulo}</h2>
             {aberta.created_at && (
               <p className="text-xs text-slate-400 mb-4">{new Date(aberta.created_at).toLocaleString("pt-BR")}</p>
             )}

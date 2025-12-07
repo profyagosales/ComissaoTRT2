@@ -1,6 +1,8 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server"
 import type { TdRequestTipo } from "@/features/tds/td-types"
 import { DEFAULT_TD_CONTENT, type TdContentSettings } from "@/features/tds/td-content"
+import { decodeVacanciaMetadata } from "@/features/vacancias/vacancia-metadata"
+import type { VacanciaClasse, VacanciaMetadata, VacanciaTipo } from "@/features/vacancias/vacancia-types"
 
 type OutraAprovacaoQueryRow = {
   id: string
@@ -174,8 +176,10 @@ export type VacanciaRecord = {
   nomeServidor: string | null
   douLink: string | null
   observacao: string | null
+  preenchida: boolean | null
   createdAt: string
   updatedAt: string | null
+  metadata: VacanciaMetadata | null
 }
 
 export type NotificationQueueItem = {
@@ -489,27 +493,92 @@ export async function loadComissaoData(): Promise<ComissaoDashboardData> {
 
   const vacanciasRows: VacanciaRow[] = (vacanciasHistoryResult.data ?? []) as VacanciaRow[]
 
-  const readString = (row: VacanciaRow, keys: string[]): string | null => {
+  const readString = (
+    row: VacanciaRow,
+    keys: string[],
+    fallbackPredicate?: (key: string) => boolean,
+  ): string | null => {
     for (const key of keys) {
       const value = row[key]
-      if (typeof value === "string" && value.length) return value
+      if (typeof value === "string" && value.trim().length) return value.trim()
     }
+
+    if (fallbackPredicate) {
+      for (const entryKey of Object.keys(row)) {
+        if (!fallbackPredicate(entryKey)) continue
+        const value = row[entryKey]
+        if (typeof value === "string" && value.trim().length) return value.trim()
+      }
+    }
+
     return null
   }
 
-  const vacanciasHistory: VacanciaRecord[] = vacanciasRows.map((row: VacanciaRow) => ({
-    id: row.id,
-    data: readString(row, ["data", "data_vacancia", "data_evento", "data_publicacao"]) ?? row.created_at ?? null,
-    tribunal: readString(row, ["tribunal", "local", "unidade"]),
-    cargo: readString(row, ["cargo", "cargo_afetado"]),
-    motivo: readString(row, ["motivo", "motivo_saida"]),
-    tipo: readString(row, ["tipo", "tipo_evento"]),
-    nomeServidor: readString(row, ["nome_servidor", "servidor", "nome"]),
-    douLink: readString(row, ["dou_link", "link", "fonte_url"]),
-    observacao: readString(row, ["observacao", "observacoes", "detalhes"]),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at ?? null,
-  }))
+  const readBoolean = (
+    row: VacanciaRow,
+    keys: string[],
+    fallbackPredicate?: (key: string) => boolean,
+  ): boolean | null => {
+    const parse = (raw: unknown): boolean | null => {
+      if (typeof raw === "boolean") return raw
+      if (typeof raw === "number") {
+        if (raw === 1) return true
+        if (raw === 0) return false
+      }
+      if (typeof raw === "string") {
+        const normalized = raw.trim().toLowerCase()
+        if (["sim", "s", "true", "1", "preenchida", "t"].includes(normalized)) return true
+        if (["nao", "não", "n", "false", "0", "nao preenchida", "não preenchida", "f"].includes(normalized)) return false
+      }
+      return null
+    }
+
+    for (const key of keys) {
+      const parsed = parse(row[key])
+      if (parsed !== null) return parsed
+    }
+
+    if (fallbackPredicate) {
+      for (const entryKey of Object.keys(row)) {
+        if (!fallbackPredicate(entryKey)) continue
+        const parsed = parse(row[entryKey])
+        if (parsed !== null) return parsed
+      }
+    }
+
+    return null
+  }
+
+  const vacanciasHistory: VacanciaRecord[] = vacanciasRows.map((row: VacanciaRow) => {
+    const rawMotivo = readString(row, ["motivo", "motivo_saida"]) ?? null
+    const { label: metadataLabel, metadata } = decodeVacanciaMetadata(rawMotivo)
+    const resolvedObservacao = metadata?.observacao ?? readString(
+      row,
+      ["observacao", "observacoes", "detalhes", "observacao_texto", "observacao_vacancia"],
+      key => key.toLowerCase().includes("observ"),
+    )
+    const resolvedPreenchida = metadata?.preenchida ?? readBoolean(
+      row,
+      ["preenchida", "foi_preenchida", "preenchida_flag", "ja_preenchida"],
+      key => key.toLowerCase().includes("preench"),
+    )
+
+    return {
+      id: row.id,
+      data: readString(row, ["data", "data_vacancia", "data_evento", "data_publicacao"]) ?? row.created_at ?? null,
+      tribunal: metadata?.tribunal ?? readString(row, ["tribunal", "local", "unidade"]),
+      cargo: metadata?.cargo ?? readString(row, ["cargo", "cargo_afetado"]),
+      motivo: metadataLabel ?? rawMotivo,
+      tipo: metadata?.tipo ?? readString(row, ["tipo", "tipo_evento"]),
+      nomeServidor: metadata?.nomeServidor ?? readString(row, ["nome_servidor", "servidor", "nome"]),
+      douLink: metadata?.douLink ?? readString(row, ["dou_link", "link", "fonte_url"]),
+      observacao: resolvedObservacao,
+      preenchida: resolvedPreenchida,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at ?? null,
+      metadata,
+    }
+  })
 
   const latestLoa: LatestLoa | null = loasHistory[0] ?? null
   const latestCsjtAuthorization: LatestCsjtAuthorization | null = csjtAuthorizationsHistory[0] ?? null

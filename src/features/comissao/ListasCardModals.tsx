@@ -67,7 +67,7 @@ export function PendenciasModal({ open, onOpenChange, pending, onModerateOutraAp
 
   return (
     <Dialog open={open} onOpenChange={handleDialogChange}>
-      <KanbanDialogContent size="narrow">
+      <KanbanDialogContent size="medium">
         <div className="flex h-full min-h-0 flex-col">
           <KanbanDialogHeader
             title="Pendências de aprovação"

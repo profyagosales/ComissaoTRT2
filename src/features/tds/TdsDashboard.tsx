@@ -1,17 +1,16 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import DOMPurify from "dompurify"
-import { ChevronLeft, ChevronRight, ExternalLink, Inbox, Search } from "lucide-react"
-
-import { Input } from "@/components/ui/input"
+import { ExternalLink, Search } from "lucide-react"
 import type { SistemaConcorrencia } from "@/features/listas/listas-actions"
 import { listaSistemaStyles } from "@/features/listas/lista-styles"
 import { cn } from "@/lib/utils"
 import type { TdsData, TdItem } from "./loadTdsData"
 import type { TdRequestTipo } from "./td-types"
 
-type StatusTab = "ENVIADOS" | "TALVEZ"
+type StatusSummaryKey = "ENVIADOS" | "TALVEZ"
+type StatusFilter = StatusSummaryKey
 type ListaFiltro = SistemaConcorrencia | "TODOS"
 type PageSizeOption = 5 | 10 | 20 | 30 | 50 | 100 | "ALL"
 type SortDirection = "asc" | "desc"
@@ -49,7 +48,7 @@ export function TdsDashboard({ data, isComissao: _isComissao, currentCandidate: 
   void _currentCandidate
   void _currentCandidateTd
 
-  const [statusTab, setStatusTab] = useState<StatusTab>("ENVIADOS")
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ENVIADOS")
   const [listaFiltro, setListaFiltro] = useState<ListaFiltro>("TODOS")
   const [search, setSearch] = useState("")
   const [pageSize, setPageSize] = useState<PageSizeOption>(10)
@@ -77,8 +76,8 @@ export function TdsDashboard({ data, isComissao: _isComissao, currentCandidate: 
 
   const resetToFirstPage = () => setCurrentPage(1)
 
-  const handleStatusTabChange = (tab: StatusTab) => {
-    setStatusTab(tab)
+  const handleStatusFilterChange = (filter: StatusFilter) => {
+    setStatusFilter(filter)
     resetToFirstPage()
   }
 
@@ -122,10 +121,12 @@ export function TdsDashboard({ data, isComissao: _isComissao, currentCandidate: 
 
     const filtered = data.items
       .filter(item => {
-        if (statusTab === "ENVIADOS") {
-          if (item.tipo_td !== "ENVIADO") return false
-        } else {
-          if (item.tipo_td !== "INTERESSE") return false
+        if (statusFilter === "ENVIADOS" && item.tipo_td !== "ENVIADO") {
+          return false
+        }
+
+        if (statusFilter === "TALVEZ" && item.tipo_td !== "INTERESSE") {
+          return false
         }
 
         if (listaFiltro !== "TODOS" && item.sistema_concorrencia !== listaFiltro) {
@@ -162,7 +163,7 @@ export function TdsDashboard({ data, isComissao: _isComissao, currentCandidate: 
 
       return 0
     })
-  }, [data.items, statusTab, listaFiltro, search, sortState])
+  }, [data.items, statusFilter, listaFiltro, search, sortState])
 
   const totalPages = useMemo(() => {
     if (pageSize === "ALL") return 1
@@ -234,47 +235,20 @@ export function TdsDashboard({ data, isComissao: _isComissao, currentCandidate: 
           )}
         </MiniInfoCard>
       </div>
-      <div className="mt-3 space-y-2">
-        <div className="border border-[#bdbbbb] bg-[#bdbbbb] px-4 pt-4 pb-0 shadow-inner shadow-black/10">
-          <div className="grid items-start gap-y-3 text-[#1f1f1f] md:grid-cols-[minmax(0,1fr)_minmax(360px,1fr)] md:grid-rows-[auto_auto] font-['Aller']">
-            <h2 className="order-1 text-left text-3xl font-['Bebas_Neue'] font-normal tracking-[0.05em] text-[#007B5F] md:col-start-1">
-              Painel de TDs
-            </h2>
-            <div className="order-2 w-full md:col-start-2 md:self-start md:ml-auto md:w-auto">
-              <div className="relative w-full md:w-[220px]">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-[#007B5F]" />
-                <Input
-                  placeholder="Buscar por nome"
-                  value={search}
-                  onChange={e => handleSearchChange(e.target.value)}
-                  className="h-[1.75rem] w-full rounded-full border border-[#c8c8c8] bg-white pl-7 pr-3 text-[10px] font-['Aller'] font-normal uppercase tracking-[0.18em] text-[#1f1f1f] shadow-none placeholder:text-[#7a7a7a] focus-visible:border-[#00B388] focus-visible:ring-[#00B388]/30"
-                />
-              </div>
-            </div>
-            <div className="order-3 flex w-full flex-wrap items-end justify-center gap-2 pb-0 md:col-span-2 md:col-start-1 md:row-start-2 md:items-end md:justify-center md:pb-0">
-              <div className="flex flex-nowrap items-end gap-1">
-                <TabFilterButton label="Enviados" active={statusTab === "ENVIADOS"} onClick={() => handleStatusTabChange("ENVIADOS")} className="rounded-t-xl" />
-                <TabFilterButton label="Talvez" active={statusTab === "TALVEZ"} onClick={() => handleStatusTabChange("TALVEZ")} className="rounded-t-xl" />
-              </div>
-              <span className="hidden h-6 w-px bg-[#cccccc] md:inline-flex" aria-hidden="true" />
-              <div className="flex flex-wrap items-end justify-center gap-1.5">
-                <SubFilterChip label="Todos" active={listaFiltro === "TODOS"} onClick={() => handleListaFiltroChange("TODOS")} />
-                <SubFilterChip label={listaSistemaStyles.AC.label} variant="AC" active={listaFiltro === "AC"} onClick={() => handleListaFiltroChange("AC")} />
-                <SubFilterChip label={listaSistemaStyles.PCD.label} variant="PCD" active={listaFiltro === "PCD"} onClick={() => handleListaFiltroChange("PCD")} />
-                <SubFilterChip label={listaSistemaStyles.PPP.label} variant="PPP" active={listaFiltro === "PPP"} onClick={() => handleListaFiltroChange("PPP")} />
-                <SubFilterChip label="Indígenas" variant="IND" active={listaFiltro === "IND"} onClick={() => handleListaFiltroChange("IND")} />
-              </div>
-            </div>
-          </div>
-        </div>
+      <div className="mt-6 space-y-0">
+        <TdsHeaderFilters
+          statusFilter={statusFilter}
+          onStatusFilterChange={handleStatusFilterChange}
+          listaFiltro={listaFiltro}
+          onListaFiltroChange={handleListaFiltroChange}
+          search={search}
+          onSearchChange={handleSearchChange}
+        />
 
-        <div className="overflow-visible border-x border-b border-[#eeeeee] border-t-0 bg-[#eeeeee]">
-          <TdsTable items={paginatedItems} sortState={sortState} onSortChange={handleSortSelection} />
-        </div>
-        <div className="h-0.5" aria-hidden="true" />
-        <div className="border-t border-dashed border-[#007B5F]" aria-hidden="true" />
-        <div className="h-1" aria-hidden="true" />
-        <PaginationControls
+        <TdsTableCard
+          items={paginatedItems}
+          sortState={sortState}
+          onSortChange={handleSortSelection}
           totalItems={filteredItems.length}
           pageSize={pageSize}
           pageSizeOptions={PAGE_SIZE_OPTIONS}
@@ -288,23 +262,93 @@ export function TdsDashboard({ data, isComissao: _isComissao, currentCandidate: 
   )
 }
 
-type TabFilterButtonProps = {
+type TdsHeaderFiltersProps = {
+  statusFilter: StatusFilter
+  onStatusFilterChange: (filter: StatusFilter) => void
+  listaFiltro: ListaFiltro
+  onListaFiltroChange: (filtro: ListaFiltro) => void
+  search: string
+  onSearchChange: (value: string) => void
+}
+
+const TD_MAIN_FILTERS: ReadonlyArray<{ value: StatusFilter; label: string }> = [
+  { value: "ENVIADOS", label: "Enviados" },
+  { value: "TALVEZ", label: "Talvez" },
+] as const
+
+const TD_QUOTA_FILTERS: ReadonlyArray<{ value: ListaFiltro; label: string }> = [
+  { value: "TODOS", label: "Todos" },
+  { value: "AC", label: "Ampla" },
+  { value: "PCD", label: "PCD" },
+  { value: "PPP", label: "PPP" },
+  { value: "IND", label: "Indígenas" },
+] as const
+
+function TdsHeaderFilters({ statusFilter, onStatusFilterChange, listaFiltro, onListaFiltroChange, search, onSearchChange }: TdsHeaderFiltersProps) {
+  return (
+    <div className="rounded-t-[18px] rounded-b-none border border-[#bdbbbb] bg-[#bdbbbb] px-4 pt-4 pb-0 shadow-inner shadow-black/10">
+      <div className="grid items-start gap-y-3 text-[#1f1f1f] md:grid-cols-[minmax(0,1fr)_minmax(220px,1fr)] md:grid-rows-[auto_auto] font-['Aller']">
+        <h2 className="order-1 text-left text-3xl font-heading font-semibold tracking-[0.05em] text-[#004C3F] md:col-start-1">
+          Painel de TDs
+        </h2>
+        <div className="order-2 w-full md:col-start-2 md:self-start md:ml-auto md:w-auto">
+          <label className="sr-only" htmlFor="tds-search">
+            Buscar por nome
+          </label>
+          <div className="flex h-6 w-full items-center gap-1 rounded-full border border-[#004C3F] bg-white/80 px-2 shadow-sm md:w-[170px]">
+            <Search className="h-[11px] w-[11px] text-[#004C3F]" strokeWidth={1.25} aria-hidden="true" />
+            <input
+              id="tds-search"
+              placeholder="Buscar por nome"
+              value={search}
+              onChange={(event) => onSearchChange(event.target.value)}
+              className="w-full border-none bg-transparent text-[11px] font-['Aller'] font-medium tracking-tight text-[#1f1f1f] placeholder:text-[#7a7a7a] focus:outline-none"
+            />
+          </div>
+        </div>
+        <div className="order-3 -mx-4 flex w-[calc(100%+2rem)] flex-wrap items-end justify-center gap-2 pb-0 md:col-span-2 md:col-start-1 md:row-start-2 md:items-end md:justify-center md:pb-0">
+          <div className="flex flex-nowrap items-end gap-1">
+            {TD_MAIN_FILTERS.map(option => (
+              <TdsMainFilterButton
+                key={`tds-main-filter-${option.value}`}
+                label={option.label}
+                active={statusFilter === option.value}
+                onClick={() => onStatusFilterChange(option.value)}
+              />
+            ))}
+          </div>
+          <span className="hidden h-6 w-px bg-[#cccccc] md:inline-flex" aria-hidden="true" />
+          <div className="flex flex-wrap items-end justify-center gap-1.5">
+            {TD_QUOTA_FILTERS.map(option => (
+              <TdsQuotaFilterChip
+                key={`tds-quota-filter-${option.value}`}
+                label={option.label}
+                active={listaFiltro === option.value}
+                onClick={() => onListaFiltroChange(option.value)}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+type TdsMainFilterButtonProps = {
   label: string
   active: boolean
   onClick: () => void
-  className?: string
 }
 
-function TabFilterButton({ label, active, onClick, className }: TabFilterButtonProps) {
+function TdsMainFilterButton({ label, active, onClick }: TdsMainFilterButtonProps) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "rounded-t-full rounded-b-none px-3.5 text-[10px] font-['Aller'] font-normal uppercase tracking-[0.18em] text-center transition duration-150 ease-out min-w-[96px]",
+        "rounded-t-full rounded-b-none px-4 text-[11px] font-['Aller'] font-semibold tracking-[0.06em] text-center transition duration-150 ease-out min-w-[120px]",
         active ? "bg-[#007B5F] text-white py-1.5 -translate-y-[3px]" : "bg-[#00B388] text-white py-1.5 translate-y-0",
-        className,
       )}
     >
       {label}
@@ -312,23 +356,20 @@ function TabFilterButton({ label, active, onClick, className }: TabFilterButtonP
   )
 }
 
-type SubFilterChipProps = {
+type TdsQuotaFilterChipProps = {
   label: string
   active: boolean
   onClick: () => void
-  variant?: ListaFiltro
-  fullWidth?: boolean
 }
 
-function SubFilterChip({ label, active, onClick, variant = "TODOS", fullWidth = false }: SubFilterChipProps) {
+function TdsQuotaFilterChip({ label, active, onClick }: TdsQuotaFilterChipProps) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "rounded-t-xl rounded-b-none px-3 text-[10px] font-['Aller'] font-normal uppercase tracking-[0.18em] text-center transition duration-150 ease-out",
-        fullWidth ? "basis-0 grow" : "min-w-[95px]",
+        "rounded-t-xl rounded-b-none px-3 text-[10px] font-['Aller'] font-semibold tracking-[0.06em] text-center transition duration-150 ease-out min-w-[95px]",
         active ? "bg-[#007B5F] text-white py-1.5 -translate-y-[3px]" : "bg-[#00B388] text-white py-1.5 translate-y-0",
       )}
     >
@@ -337,7 +378,7 @@ function SubFilterChip({ label, active, onClick, variant = "TODOS", fullWidth = 
   )
 }
 
-type TableProps = {
+type TdsTableProps = {
   items: TdItem[]
   sortState: SortState
   onSortChange: (column: SortableColumn, direction: SortDirection) => void
@@ -356,105 +397,234 @@ const TABLE_HEADER_LABELS: readonly TableHeaderDescriptor[] = [
   { key: "OBSERVAÇÕES DO TD", align: "left" },
 ] as const
 
-function TdsTable({ items, sortState, onSortChange }: TableProps) {
-  if (!items.length) {
-    return (
-      <div className="flex min-h-[220px] flex-col items-center justify-center gap-3 text-center font-['Aller']">
-        <Inbox className="h-10 w-10 text-zinc-400" />
-        <div className="space-y-1">
-          <p className="text-sm font-bold text-zinc-700">Nenhum TD encontrado com os filtros atuais.</p>
-          <p className="text-sm font-light text-zinc-500">Ajuste os filtros ou refine a busca para ver mais registros.</p>
-        </div>
-      </div>
-    )
-  }
-
+function TdsTable({ items, sortState, onSortChange }: TdsTableProps) {
   return (
-    <div className="overflow-x-auto font-['Aller']">
-      <table className="min-w-full table-fixed border-collapse border border-[rgba(0,123,95,0.45)] bg-[#f5f5f5] text-sm text-zinc-700">
-        <colgroup>
-          <col className="w-[110px]" />
-          <col className="w-[90px]" />
-          <col className="w-[110px]" />
-          <col className="w-[560px]" />
-          <col />
-        </colgroup>
-        <thead>
-          <tr className="text-[12px] text-[#007B5F]">
-            {TABLE_HEADER_LABELS.map(({ key, align, sortKey }) => (
-              <th
-                key={key}
-                scope="col"
+    <table className="min-w-full table-fixed border-collapse border border-[#e8e8e8] font-['Aller'] text-sm text-[#1f1f1f]">
+      <colgroup>
+        <col className="w-[120px]" />
+        <col className="w-[120px]" />
+        <col className="w-[120px]" />
+        <col className="w-[260px]" />
+        <col />
+      </colgroup>
+      <thead style={{ backgroundColor: "#f3f1f1" }}>
+        <tr>
+          {TABLE_HEADER_LABELS.map(({ key, align, sortKey }) => (
+            <th
+              key={key}
+              scope="col"
+              className={cn(
+                "border-b border-[#e8e8e8] px-3 py-2",
+                align === "center" ? "text-center" : "text-left",
+              )}
+            >
+              <div
                 className={cn(
-                  "border-b border-[rgba(0,123,95,0.45)] border-r border-[#cccaca] bg-[#eeeeee] px-1 py-1.5 text-left font-semibold first:pl-0 last:border-r-0 last:pr-0",
-                  align === "center" && "text-center",
+                  "flex items-center gap-2",
+                  align === "center" ? "justify-center" : "justify-start",
                 )}
               >
-                <div
+                <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#004C3F]">{key}</span>
+                {sortKey ? (
+                  <ColumnSortControls
+                    alignment={align}
+                    activeDirection={sortState[sortKey]}
+                    onSelect={direction => onSortChange(sortKey, direction)}
+                  />
+                ) : null}
+              </div>
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {items.map(item => {
+          const listaStyle = listaSistemaStyles[item.sistema_concorrencia]
+          const tdLink = extractLinkFromText(item.observacao)
+          const statusDateText = formatStatusDate(item.tipo_td ?? null, item.data_aprovacao)
+          const observationText = item.observacao?.trim() || "Sem observações registradas"
+
+          return (
+            <tr key={item.td_request_id} className="text-[13px]">
+              <td className="border-b border-[#f0f0f0] px-3 py-2 text-center text-[#1f1f1f]">{statusDateText}</td>
+              <td className="border-b border-[#f0f0f0] px-3 py-2 text-center">
+                <span
                   className={cn(
-                    "flex w-full items-center rounded-md bg-[#eeeeee] px-3 py-0.5 text-[12px] font-semibold text-[#007B5F]",
-                    align === "center" ? "justify-center gap-1 text-center" : "justify-start gap-1 text-left",
+                    "inline-flex min-w-[86px] items-center justify-center rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.04em] text-white",
+                    listaStyle.className,
                   )}
                 >
-                  <span>{key}</span>
-                  {sortKey ? (
-                    <ColumnSortControls
-                      alignment={align}
-                      activeDirection={sortState[sortKey]}
-                      onSelect={direction => onSortChange(sortKey, direction)}
-                    />
-                  ) : null}
-                </div>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {items.map(item => {
-            const listaStyle = listaSistemaStyles[item.sistema_concorrencia]
-            const tdLink = extractLinkFromText(item.observacao)
-            const statusDateText = formatStatusDate(item.tipo_td ?? null, item.data_aprovacao)
-            const observationText = item.observacao?.trim() || "Sem observações registradas"
+                  {listaStyle.label}
+                </span>
+              </td>
+              <td className="border-b border-[#f0f0f0] px-3 py-2 text-center text-[#1f1f1f]">
+                {item.ordem_nomeacao_base ?? "—"}
+              </td>
+              <td className="border-b border-[#f0f0f0] px-3 py-2 text-left text-[#1f1f1f]">
+                {item.nome_candidato}
+              </td>
+              <td className="border-b border-[#f0f0f0] px-3 py-2 text-left text-[#4A4F55]">
+                <p className="line-clamp-2 text-[12px] leading-tight">{observationText}</p>
+                {tdLink ? (
+                  <a
+                    href={tdLink}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-[#004C3F] underline"
+                  >
+                    Abrir TD
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                ) : null}
+              </td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </table>
+  )
+}
 
-            return (
-              <tr key={item.td_request_id} className="align-top text-[13px] text-zinc-700">
-                <td className="border-b border-[rgba(0,123,95,0.35)] border-r border-[#cccaca] bg-white px-1 py-1 text-center text-[12px] font-normal text-zinc-700 first:pl-0 first:pr-1 last:border-r-0 last:pr-0">
-                  <div className="mx-1 rounded-md bg-white px-2 py-0.25">{statusDateText}</div>
-                </td>
-                <td className="border-b border-[rgba(0,123,95,0.35)] border-r border-[#cccaca] bg-white px-1 py-1 text-center first:pl-0 first:pr-1 last:border-r-0 last:pr-0">
-                  <div className="mx-1 rounded-md bg-white px-2 py-0.25">
-                    <span className={cn("inline-flex w-[82px] items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.25em]", listaStyle.className)}>
-                      {listaStyle.label}
-                    </span>
-                  </div>
-                </td>
-                <td className="border-b border-[rgba(0,123,95,0.35)] border-r border-[#cccaca] bg-white px-1 py-1 text-center text-[12px] font-normal text-zinc-800 first:pl-0 first:pr-1 last:border-r-0 last:pr-0">
-                  <div className="mx-1 rounded-md bg-white px-2 py-0.25">{item.ordem_nomeacao_base ?? "—"}</div>
-                </td>
-                <td className="border-b border-[rgba(0,123,95,0.35)] border-r border-[#cccaca] bg-white px-1 py-1 text-[13px] font-normal text-zinc-900 first:pl-0 first:pr-1 last:border-r-0 last:pr-0">
-                  <div className="mx-1 rounded-md bg-white px-2 py-0.25">{item.nome_candidato}</div>
-                </td>
-                <td className="border-b border-[rgba(0,123,95,0.35)] bg-white px-1 py-1 text-[12px] text-zinc-600 first:pl-0 last:border-r-0 last:pr-0">
-                  <div className="mx-1 rounded-md bg-white px-2 py-0.25">
-                    <p className="mb-1 leading-snug">{observationText}</p>
-                    {tdLink ? (
-                      <a
-                        href={tdLink}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 hover:text-rose-600"
-                      >
-                        Abrir TD
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    ) : null}
-                  </div>
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+type TdsTableCardProps = {
+  items: TdItem[]
+  sortState: SortState
+  onSortChange: (column: SortableColumn, direction: SortDirection) => void
+  totalItems: number
+  pageSize: PageSizeOption
+  pageSizeOptions: readonly PageSizeOption[]
+  currentPage: number
+  totalPages: number
+  onPageChange: (page: number) => void
+  onPageSizeChange: (size: PageSizeOption) => void
+}
+
+function TdsTableCard({
+  items,
+  sortState,
+  onSortChange,
+  totalItems,
+  pageSize,
+  pageSizeOptions,
+  currentPage,
+  totalPages,
+  onPageChange,
+  onPageSizeChange,
+}: TdsTableCardProps) {
+  return (
+    <div className="flex h-full flex-col rounded-b-[18px] rounded-t-none border border-[#d9d9d9] bg-white shadow-sm shadow-black/5">
+      <div className="flex-1 overflow-x-auto">
+        {items.length ? (
+          <TdsTable items={items} sortState={sortState} onSortChange={onSortChange} />
+        ) : (
+          <div className="flex min-h-[280px] flex-col items-center justify-center gap-3 text-center font-['Aller']">
+            <p className="text-base font-semibold text-[#4A4F55]">Nenhum TD encontrado com os filtros atuais.</p>
+            <p className="text-sm text-[#7a7a7a]">Ajuste os filtros ou refine a busca para ver mais registros.</p>
+          </div>
+        )}
+      </div>
+      <div className="border-t border-[#eeeeee] px-4 py-3">
+        <TdsPaginationControls
+          totalItems={totalItems}
+          pageSize={pageSize}
+          pageSizeOptions={pageSizeOptions}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={onPageChange}
+          onPageSizeChange={onPageSizeChange}
+        />
+      </div>
+    </div>
+  )
+}
+
+type TdsPaginationControlsProps = {
+  totalItems: number
+  pageSize: PageSizeOption
+  pageSizeOptions: readonly PageSizeOption[]
+  currentPage: number
+  totalPages: number
+  onPageChange: (page: number) => void
+  onPageSizeChange: (size: PageSizeOption) => void
+}
+
+function TdsPaginationControls({
+  totalItems,
+  pageSize,
+  pageSizeOptions,
+  currentPage,
+  totalPages,
+  onPageChange,
+  onPageSizeChange,
+}: TdsPaginationControlsProps) {
+  const serialize = (value: PageSizeOption) => (value === "ALL" ? "ALL" : String(value))
+  const parseValue = (value: string): PageSizeOption => (value === "ALL" ? "ALL" : Number(value) as PageSizeOption)
+
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), Math.max(1, totalPages))
+
+  let rangeStart = 0
+  let rangeEnd = 0
+  if (totalItems === 0) {
+    rangeStart = 0
+    rangeEnd = 0
+  } else if (pageSize === "ALL") {
+    rangeStart = 1
+    rangeEnd = totalItems
+  } else {
+    rangeStart = (safeCurrentPage - 1) * pageSize + 1
+    rangeEnd = Math.min(totalItems, safeCurrentPage * pageSize)
+  }
+
+  const goToPrev = () => onPageChange(Math.max(1, safeCurrentPage - 1))
+  const goToNext = () => onPageChange(Math.min(totalPages, safeCurrentPage + 1))
+
+  const showPaginationControls = pageSize !== "ALL" && totalPages > 1 && totalItems > 0
+
+  return (
+    <div className="flex flex-col gap-3 text-sm text-[#4A4F55] md:flex-row md:items-center md:justify-between">
+      <div className="text-xs text-[#4A4F55]">
+        Mostrando {rangeStart}–{rangeEnd} de {totalItems} TD{totalItems === 1 ? "" : "s"}
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-1 text-xs text-[#7a7a7a]">
+          <span>Por página:</span>
+          <select
+            value={serialize(pageSize)}
+            onChange={(event) => onPageSizeChange(parseValue(event.target.value))}
+            className="rounded-full border border-[#d9d9d9] px-3 py-1 text-xs text-[#1f1f1f]"
+          >
+            {pageSizeOptions.map((size) => (
+              <option key={size} value={serialize(size)}>
+                {size === "ALL" ? "Todos" : size}
+              </option>
+            ))}
+          </select>
+        </div>
+        {showPaginationControls ? (
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={goToPrev}
+              disabled={safeCurrentPage === 1}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#cfcfcf] text-sm text-[#1f1f1f] disabled:opacity-40"
+              aria-label="Página anterior"
+            >
+              ‹
+            </button>
+            <div className="text-xs font-semibold text-[#1f1f1f]">
+              {safeCurrentPage}/{totalPages}
+            </div>
+            <button
+              type="button"
+              onClick={goToNext}
+              disabled={safeCurrentPage === totalPages}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#cfcfcf] text-sm text-[#1f1f1f] disabled:opacity-40"
+              aria-label="Próxima página"
+            >
+              ›
+            </button>
+          </div>
+        ) : null}
+      </div>
     </div>
   )
 }
@@ -558,132 +728,6 @@ function ColumnSortControls({ activeDirection, onSelect, alignment }: ColumnSort
   )
 }
 
-type PaginationControlsProps = {
-  totalItems: number
-  pageSize: PageSizeOption
-  pageSizeOptions: readonly PageSizeOption[]
-  currentPage: number
-  totalPages: number
-  onPageChange: (page: number) => void
-  onPageSizeChange: (size: PageSizeOption) => void
-}
-
-function PaginationControls({ totalItems, pageSize, pageSizeOptions, currentPage, totalPages, onPageChange, onPageSizeChange }: PaginationControlsProps) {
-  if (!totalItems) return null
-
-  const serialize = (value: PageSizeOption) => (value === "ALL" ? "ALL" : String(value))
-
-  const handlePageSizeChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    const value = event.target.value
-    const parsedSize = value === "ALL" ? "ALL" : Number(value)
-    onPageSizeChange(parsedSize as PageSizeOption)
-  }
-
-  if (pageSize === "ALL") {
-    return (
-      <div className="flex flex-col gap-4 font-['Aller'] text-black sm:flex-row sm:items-center sm:justify-between">
-        <label className="flex items-center gap-2 text-sm font-normal">
-          <span>Itens por página</span>
-          <select
-            className="h-[1.5rem] rounded-full border border-black bg-transparent px-2 py-0 text-center text-sm font-normal text-black transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-black/40"
-            value={serialize(pageSize)}
-            onChange={handlePageSizeChange}
-          >
-            {pageSizeOptions.map(option => (
-              <option key={`td-page-size-${option}`} value={serialize(option)}>
-                {option === "ALL" ? "Todos" : option}
-              </option>
-            ))}
-          </select>
-        </label>
-        <p className="text-sm font-normal">Mostrando todos os {totalItems} TDs</p>
-      </div>
-    )
-  }
-
-  const safePage = Math.min(Math.max(1, currentPage), totalPages)
-  const rangeStart = totalItems ? (safePage - 1) * pageSize + 1 : 0
-  const rangeEnd = Math.min(totalItems, safePage * pageSize)
-
-  const goToPrev = () => onPageChange(Math.max(1, safePage - 1))
-  const goToNext = () => onPageChange(Math.min(totalPages, safePage + 1))
-
-  const renderPageButtons = () => {
-    const buttons = []
-    const windowSize = 5
-    let start = Math.max(1, safePage - 2)
-    const end = Math.min(totalPages, start + windowSize - 1)
-    start = Math.max(1, end - windowSize + 1)
-
-    for (let page = start; page <= end; page++) {
-      const isActive = page === safePage
-      buttons.push(
-        <button
-          key={`tds-page-${page}`}
-          type="button"
-          onClick={() => onPageChange(page)}
-          className={cn(
-            "inline-flex items-center justify-center rounded-full border px-2 py-0.5 text-sm font-normal leading-none transition",
-            isActive
-              ? "border-[#00B388] bg-[#00B388] text-white"
-              : "border-black text-black hover:bg-black/10",
-          )}
-          aria-current={isActive ? "page" : undefined}
-        >
-          {page}
-        </button>,
-      )
-    }
-
-    return buttons
-  }
-
-  return (
-    <div className="flex flex-col gap-4 font-['Aller'] text-black lg:flex-row lg:items-center lg:justify-between">
-      <label className="flex items-center gap-2 text-sm font-normal">
-        <span>Itens por página</span>
-        <select
-          className="h-[1.5rem] rounded-full border border-black bg-transparent px-2 py-0 text-center text-sm font-normal text-black transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-black/40"
-          value={serialize(pageSize)}
-          onChange={handlePageSizeChange}
-        >
-          {pageSizeOptions.map(option => (
-            <option key={`td-page-size-${option}`} value={serialize(option)}>
-              {option === "ALL" ? "Todos" : option}
-            </option>
-          ))}
-        </select>
-      </label>
-      <div className="flex flex-col gap-3 text-sm font-normal lg:flex-row lg:items-center lg:gap-4">
-        <span>
-          Mostrando {rangeStart}-{rangeEnd} de {totalItems} TDs
-        </span>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={goToPrev}
-            disabled={safePage === 1}
-            aria-label="Página anterior"
-            className="inline-flex items-center justify-center rounded-full border border-black px-2 py-0.5 text-sm font-normal leading-none text-black transition enabled:hover:bg-black/10 disabled:opacity-30"
-          >
-            <ChevronLeft className="h-3 w-3" />
-          </button>
-          <div className="flex items-center gap-1">{renderPageButtons()}</div>
-          <button
-            type="button"
-            onClick={goToNext}
-            disabled={safePage === totalPages}
-            aria-label="Próxima página"
-            className="inline-flex items-center justify-center rounded-full border border-black px-2 py-0.5 text-sm font-normal leading-none text-black transition enabled:hover:bg-black/10 disabled:opacity-30"
-          >
-            <ChevronRight className="h-3 w-3" />
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 type MiniInfoCardProps = {
   title: string
   children: ReactNode
@@ -717,7 +761,7 @@ const LISTA_COLORS: Record<SistemaConcorrencia, string> = {
   IND: "#353638",
 }
 
-type StatusSummary = Record<StatusTab, { total: number; segments: Array<{ key: SistemaConcorrencia; value: number; color: string }> }>
+type StatusSummary = Record<StatusSummaryKey, { total: number; segments: Array<{ key: SistemaConcorrencia; value: number; color: string }> }>
 
 function buildStatusSummary(items: TdItem[]): StatusSummary {
   const initCounts = () => LISTA_ORDER.reduce((acc, key) => ({ ...acc, [key]: 0 }), {} as Record<SistemaConcorrencia, number>)
@@ -738,7 +782,7 @@ function buildStatusSummary(items: TdItem[]): StatusSummary {
     }
   }
 
-  const toSummary = (status: StatusTab) => ({
+  const toSummary = (status: StatusSummaryKey) => ({
     total: totals[status],
     segments: LISTA_ORDER.map(key => ({
       key,

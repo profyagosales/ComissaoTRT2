@@ -1,115 +1,85 @@
 "use client"
 
-import Image from "next/image"
 import Link from "next/link"
 import { useMemo } from "react"
 import { usePathname } from "next/navigation"
-import { Instagram, LogOut, Mail } from "lucide-react"
+import { LogOut } from "lucide-react"
+
+import { cn } from "@/lib/utils"
+import { NotificationsMenu, type NavbarNotification } from "@/components/NotificationsMenu"
 
 type NavItem = {
   href: string
   label: string
-  emphasis?: boolean
+  requiresComissao?: boolean
 }
 
-const BASE_NAV_ITEMS: NavItem[] = [
+const NAV_ITEMS: NavItem[] = [
   { href: "/resumo", label: "Resumo" },
   { href: "/listas", label: "Listas" },
   { href: "/tds", label: "TDs" },
   { href: "/vacancias", label: "Vacâncias" },
+  { href: "/comissao", label: "Comissão", requiresComissao: true },
 ]
 
-const EMAIL = "aprovados.tjaa.trt2.2025@gmail.com"
-const INSTAGRAM_URL = "https://www.instagram.com/aprovados_tjaa/"
+type AppNavbarProps = {
+  isComissao?: boolean
+  notifications?: NavbarNotification[]
+}
 
-export function AppNavbar({ isComissao = false }: { isComissao?: boolean }) {
+export function AppNavbar({ isComissao = false, notifications = [] }: AppNavbarProps) {
   const pathname = usePathname()
 
-  const navItems = useMemo(() => {
-    if (!isComissao) return BASE_NAV_ITEMS
-    return [...BASE_NAV_ITEMS, { href: "/comissao", label: "Comissão", emphasis: true }]
-  }, [isComissao])
+  const navItems = useMemo(
+    () => NAV_ITEMS.filter((item) => (item.requiresComissao ? isComissao : true)),
+    [isComissao],
+  )
+
+  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`)
 
   return (
-    <header className="sticky top-0 z-40">
-      <div className="w-full rounded-b-3xl bg-gradient-to-r from-red-900 via-red-800 to-red-900 shadow-md shadow-black/40">
-        <div className="flex items-center justify-between px-4 pt-1 pb-3 lg:px-6">
-          <div className="flex items-center gap-3 pl-1.5">
-            <div className="relative h-14 w-14 translate-y-[0.4rem] md:h-16 md:w-16">
-              <Image
-                src="/logo-tjaa-trt2.png"
-                alt="Comissão TJAA TRT-2"
-                fill
-                priority
-                sizes="(max-width: 768px) 3.5rem, 4rem"
-                className="object-contain drop-shadow-[0_0_16px_rgba(0,0,0,0.55)]"
-              />
-            </div>
-
-            <div className="leading-tight text-white">
-              <p className="text-sm font-semibold md:text-base">
-                APROVADOS TJAA · TRT-2
-              </p>
-              <p className="text-sm font-semibold md:text-base">Painel do aprovado</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 pr-1 md:gap-3">
-            <Link
-              href={`mailto:${EMAIL}`}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-black/25 text-red-50 shadow-sm shadow-black/40 transition-colors hover:bg-black/40"
-              aria-label="Contato por e-mail"
-            >
-              <Mail className="h-4 w-4" aria-hidden />
-            </Link>
-
-            <Link
-              href={INSTAGRAM_URL}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-black/25 text-red-50 shadow-sm shadow-black/40 transition-colors hover:bg-black/40"
-              aria-label="Instagram da Comissão"
-            >
-              <Instagram className="h-4 w-4" aria-hidden />
-            </Link>
-
-            <Link
-              href="/"
-              className="inline-flex items-center gap-1.5 rounded-full bg-black/30 px-3.5 py-1.5 text-xs font-semibold text-red-50 shadow-sm shadow-black/40 transition-colors hover:bg-black/45"
-            >
-              <LogOut className="h-3.5 w-3.5" aria-hidden />
-              <span>Sair</span>
-            </Link>
-          </div>
+    <header className="sticky top-0 z-40 hidden bg-[#01426A] text-white md:block">
+      <div className="mx-auto flex h-16 w-full items-center justify-between gap-4 px-3 sm:px-4 lg:px-6 xl:px-8">
+        <div className="flex flex-1 items-center">
+          <span className="font-display text-lg text-white whitespace-nowrap">Aprovados TJAA · TRT-2</span>
         </div>
 
-        <div className="mt-[-42px] flex justify-center px-4 pb-2 pt-1 lg:mt-[-44px] lg:px-6 lg:pb-2.5 lg:pt-1.5">
-          <nav className="flex flex-wrap items-center justify-center gap-2">
-            {navItems.map(item => {
-              const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
-              const isEmphasis = Boolean(item.emphasis)
+        <nav className="flex flex-1 items-center justify-center">
+          <div className="flex max-w-full overflow-x-auto px-3">
+            <ul className="flex flex-nowrap items-center justify-center gap-2 md:gap-3">
+              {navItems.map((item) => {
+              const isComissaoTab = item.href === "/comissao"
+              const baseClasses = "inline-flex items-center rounded-full px-4 py-2 text-xs font-display transition-colors whitespace-nowrap md:text-sm"
+              const linkClasses = isComissaoTab
+                ? cn(baseClasses, "bg-[#FFCD00] text-[#01426A] hover:brightness-95")
+                : cn(
+                    baseClasses,
+                    isActive(item.href)
+                      ? "bg-white text-[#01426A]"
+                      : "bg-[#0067A0] text-white hover:bg-white/10",
+                  )
 
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={[
-                    "inline-flex items-center rounded-full px-5 py-[0.35rem] text-sm font-medium transition-all",
-                    "outline-none ring-2 ring-transparent focus-visible:ring-white/80",
-                    isEmphasis
-                      ? active
-                        ? "bg-black text-white shadow-sm shadow-black/40"
-                        : "bg-black/90 text-white hover:bg-black"
-                      : active
-                        ? "bg-white text-red-900 shadow-sm shadow-black/30"
-                        : "bg-white/10 text-red-50 hover:bg-white/18",
-                  ].join(" ")}
-                >
-                  {item.label}
-                </Link>
-              )
-            })}
-          </nav>
+                return (
+                  <li key={item.href}>
+                    <Link href={item.href} className={linkClasses}>
+                      {item.label}
+                    </Link>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        </nav>
+
+        <div className="flex flex-1 items-center justify-end gap-3">
+          <NotificationsMenu notifications={notifications} />
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/16 px-4 py-2 text-[12px] font-medium text-white/90 shadow-[0_10px_24px_rgba(0,0,0,0.24)] transition hover:border-white/45 hover:bg-white/24 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+          >
+            <LogOut className="h-4 w-4" aria-hidden />
+            <span>Sair</span>
+          </Link>
         </div>
       </div>
     </header>

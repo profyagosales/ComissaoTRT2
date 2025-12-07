@@ -1,4 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { decodeVacanciaMetadata } from "./vacancia-metadata"
 import type { VacanciaClasse, VacanciaRow, VacanciaTipo, VacanciasData } from "./vacancia-types"
 
 const VACANCIA_COLUMN_ALIASES = {
@@ -9,7 +10,8 @@ const VACANCIA_COLUMN_ALIASES = {
   tipo: ["tipo", "tipo_evento"],
   nomeServidor: ["nome_servidor", "servidor", "nome"],
   douLink: ["dou_link", "link", "fonte_url"],
-  observacao: ["observacao", "observacoes", "detalhes"],
+  observacao: ["observacao", "observacoes", "detalhes", "observacao_texto", "observacao_vacancia"],
+  preenchida: ["preenchida", "foi_preenchida", "preenchida_flag", "ja_preenchida"],
 }
 
 const CLASS_MATCH_MAP: Record<string, VacanciaClasse> = {
@@ -35,13 +37,63 @@ function normalizeKey(value?: string | null) {
     .replace(/[^A-Z]/g, "")
 }
 
-function readString(row: Record<string, unknown>, aliases: string[]): string | null {
+function readString(
+  row: Record<string, unknown>,
+  aliases: string[],
+  fallbackPredicate?: (key: string) => boolean,
+): string | null {
   for (const alias of aliases) {
     const value = row[alias]
-    if (typeof value === "string" && value.length) {
-      return value
+    if (typeof value === "string" && value.trim().length) {
+      return value.trim()
     }
   }
+
+  if (fallbackPredicate) {
+    for (const key of Object.keys(row)) {
+      if (!fallbackPredicate(key)) continue
+      const value = row[key]
+      if (typeof value === "string" && value.trim().length) {
+        return value.trim()
+      }
+    }
+  }
+
+  return null
+}
+
+function readBoolean(
+  row: Record<string, unknown>,
+  aliases: string[],
+  fallbackPredicate?: (key: string) => boolean,
+): boolean | null {
+  const parse = (raw: unknown): boolean | null => {
+    if (typeof raw === "boolean") return raw
+    if (typeof raw === "number") {
+      if (raw === 1) return true
+      if (raw === 0) return false
+    }
+    if (typeof raw === "string") {
+      const normalized = raw.trim().toLowerCase()
+      if (["sim", "s", "true", "1", "preenchida", "t"].includes(normalized)) return true
+      if (["nao", "não", "n", "false", "0", "nao preenchida", "não preenchida", "f"].includes(normalized)) return false
+    }
+    return null
+  }
+
+  for (const alias of aliases) {
+    const parsed = parse(row[alias])
+    if (parsed !== null) return parsed
+  }
+
+  if (fallbackPredicate) {
+    for (const key of Object.keys(row)) {
+      if (!fallbackPredicate(key)) continue
+      const parsed = parse(row[key])
+      if (parsed !== null) return parsed
+    }
+  }
+
   return null
 }
 
@@ -80,13 +132,16 @@ function mapRow(row: Record<string, unknown>): VacanciaRow | null {
   const id = typeof row.id === "string" ? row.id : null
   if (!id) return null
   const data = readString(row, VACANCIA_COLUMN_ALIASES.data) ?? (typeof row.created_at === "string" ? row.created_at : null)
-  const tribunal = readString(row, VACANCIA_COLUMN_ALIASES.tribunal)
-  const cargo = readString(row, VACANCIA_COLUMN_ALIASES.cargo)
-  const tipo = mapTipo(readString(row, VACANCIA_COLUMN_ALIASES.tipo))
-  const classe = mapClasse(readString(row, VACANCIA_COLUMN_ALIASES.motivo), tipo)
-  const servidor = readString(row, VACANCIA_COLUMN_ALIASES.nomeServidor)
-  const douLink = readString(row, VACANCIA_COLUMN_ALIASES.douLink)
-  const observacao = readString(row, VACANCIA_COLUMN_ALIASES.observacao)
+  const rawMotivo = readString(row, VACANCIA_COLUMN_ALIASES.motivo)
+  const { label: metadataLabel, metadata } = decodeVacanciaMetadata(rawMotivo)
+  const tribunal = metadata?.tribunal ?? readString(row, VACANCIA_COLUMN_ALIASES.tribunal)
+  const cargo = metadata?.cargo ?? readString(row, VACANCIA_COLUMN_ALIASES.cargo)
+  const tipo = mapTipo(metadata?.tipo ?? readString(row, VACANCIA_COLUMN_ALIASES.tipo))
+  const classe = metadata?.classeKey ?? mapClasse(metadataLabel ?? rawMotivo, tipo)
+  const servidor = metadata?.nomeServidor ?? readString(row, VACANCIA_COLUMN_ALIASES.nomeServidor)
+  const douLink = metadata?.douLink ?? readString(row, VACANCIA_COLUMN_ALIASES.douLink)
+  const observacao = metadata?.observacao ?? readString(row, VACANCIA_COLUMN_ALIASES.observacao, key => key.toLowerCase().includes("observ"))
+  const preenchida = metadata?.preenchida ?? readBoolean(row, VACANCIA_COLUMN_ALIASES.preenchida, key => key.toLowerCase().includes("preench"))
 
   return {
     id,
@@ -98,6 +153,8 @@ function mapRow(row: Record<string, unknown>): VacanciaRow | null {
     servidor,
     douLink,
     observacao,
+    preenchida,
+    metadata: metadata ?? null,
   }
 }
 

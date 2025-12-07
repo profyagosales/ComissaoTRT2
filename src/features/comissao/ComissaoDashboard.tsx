@@ -5,7 +5,16 @@ import { ClipboardList, FileSignature, ListChecks, Megaphone, Settings2 } from "
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
-import { LoaModal, CsjtModal, CargosVagosModal } from "./ResumoCardModals"
+import {
+  LoaModal,
+  CsjtModal,
+  CargosVagosModal,
+  ComissaoLogoModal,
+  ComissaoValidadeModal,
+  ComissaoInstagramModal,
+  ComissaoEmailModal,
+  ComissaoGrupoModal,
+} from "./ResumoCardModals"
 import { PendenciasModal, NovoCandidatoModal, NomeacaoModal, NovaAprovacaoModal } from "./ListasCardModals"
 import { TdPendenciasModal, TdContentEditorModal, TdManualModal } from "./TdCardModals"
 import { NovaVacanciaModal, VacanciasHistoryModal } from "./VacanciasCardModals"
@@ -89,6 +98,11 @@ export function ComissaoDashboard({ data, actions }: ComissaoDashboardProps) {
     notificationsQueue,
   } = data
 
+  const [openLogoModal, setOpenLogoModal] = useState(false)
+  const [openValidadeModal, setOpenValidadeModal] = useState(false)
+  const [openInstagramModal, setOpenInstagramModal] = useState(false)
+  const [openEmailModal, setOpenEmailModal] = useState(false)
+  const [openGrupoModal, setOpenGrupoModal] = useState(false)
   const [openLoa, setOpenLoa] = useState(false)
   const [openCsjt, setOpenCsjt] = useState(false)
   const [openCargosVagos, setOpenCargosVagos] = useState(false)
@@ -121,6 +135,12 @@ export function ComissaoDashboard({ data, actions }: ComissaoDashboardProps) {
       iconClass: "bg-red-50 text-red-700",
       content: (
         <div className="space-y-2">
+          <CardActionButton onClick={() => setOpenLogoModal(true)}>Logo da comissão</CardActionButton>
+          <CardActionButton onClick={() => setOpenValidadeModal(true)}>Validade</CardActionButton>
+          <CardActionButton onClick={() => setOpenInstagramModal(true)}>Instagram</CardActionButton>
+          <CardActionButton onClick={() => setOpenEmailModal(true)}>E-mail</CardActionButton>
+          <CardActionButton onClick={() => setOpenGrupoModal(true)}>Grupo</CardActionButton>
+          <div className="pt-2" />
           <CardActionButton onClick={() => setOpenLoa(true)}>LOA</CardActionButton>
           <CardActionButton onClick={() => setOpenCsjt(true)}>CSJT</CardActionButton>
           <CardActionButton onClick={() => setOpenCargosVagos(true)}>CARGOS VAGOS</CardActionButton>
@@ -212,7 +232,7 @@ export function ComissaoDashboard({ data, actions }: ComissaoDashboardProps) {
       content: (
         <div className="space-y-2">
           <CardActionButton onClick={() => setOpenNovaVacancia(true)}>Nova vacância</CardActionButton>
-          <CardActionButton onClick={() => setOpenHistoricoVacancias(true)}>Histórico</CardActionButton>
+          <CardActionButton onClick={() => setOpenHistoricoVacancias(true)}>Editar Vacâncias</CardActionButton>
         </div>
       ),
     },
@@ -250,6 +270,12 @@ export function ComissaoDashboard({ data, actions }: ComissaoDashboardProps) {
           ))}
         </div>
       </div>
+
+      <ComissaoLogoModal open={openLogoModal} onOpenChange={setOpenLogoModal} />
+      <ComissaoValidadeModal open={openValidadeModal} onOpenChange={setOpenValidadeModal} />
+      <ComissaoInstagramModal open={openInstagramModal} onOpenChange={setOpenInstagramModal} />
+      <ComissaoEmailModal open={openEmailModal} onOpenChange={setOpenEmailModal} />
+      <ComissaoGrupoModal open={openGrupoModal} onOpenChange={setOpenGrupoModal} />
 
       <LoaModal open={openLoa} onOpenChange={setOpenLoa} loas={loasHistory} onUpsertLoa={actions.upsertLoa} />
       <CsjtModal

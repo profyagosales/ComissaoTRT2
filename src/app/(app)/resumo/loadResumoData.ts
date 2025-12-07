@@ -1,4 +1,7 @@
+import type { ComissaoResumoConfig } from "@/features/comissao/comissao-resumo-types";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import type { TdContentSettings } from "@/features/tds/td-content";
+import { fetchTdContentSettings } from "@/features/tds/loadTdsData";
 
 export type ResumoPosicoes = {
   candidatosNaFrenteOrdem: number;
@@ -98,6 +101,21 @@ export type CandidateResumoData = {
   ultimasVacancias: Vacancia[];
   ultimasNotificacoes: Notificacao[];
   outrasAprovacoesCount: number;
+  outrasAprovacoes: OutraAprovacaoResumo[];
+  tdContent: TdContentSettings;
+  resumoConfig: ComissaoResumoConfig | null;
+};
+
+export type OutraAprovacaoResumo = {
+  id: string;
+  orgao: string | null;
+  cargo: string | null;
+  sistema_concorrencia: string | null;
+  classificacao: number | null;
+  pretende_assumir: string | null;
+  ja_foi_nomeado: string | null;
+  observacao: string | null;
+  status: string | null;
 };
 
 export async function loadResumoData(
@@ -250,6 +268,48 @@ export async function loadResumoData(
     console.error(outrasAprovacoesError);
   }
 
+  const { data: outrasAprovacoesRows = [], error: outrasAprovacoesListError } =
+    await supabase
+      .from("outras_aprovacoes")
+      .select(
+        "id, orgao, cargo, sistema_concorrencia, classificacao, pretende_assumir, ja_foi_nomeado, observacao, status, updated_at, created_at",
+      )
+      .eq("candidate_id", candidateId)
+      .order("updated_at", { ascending: false })
+      .order("created_at", { ascending: false });
+
+  if (outrasAprovacoesListError) {
+    console.error(outrasAprovacoesListError);
+  }
+
+  const tdContent = await fetchTdContentSettings(supabase);
+
+  const { data: resumoConfigRow, error: resumoConfigError } = await supabase
+    .from("comissao_resumo")
+    .select("*")
+    .eq("id", 1)
+    .maybeSingle<ComissaoResumoConfig>();
+
+  if (resumoConfigError) {
+    console.error(resumoConfigError);
+  }
+
+  const resumoConfig = resumoConfigRow ?? null;
+
+  const outrasAprovacoes: OutraAprovacaoResumo[] = Array.isArray(outrasAprovacoesRows)
+    ? outrasAprovacoesRows.map(row => ({
+        id: row.id,
+        orgao: row.orgao ?? null,
+        cargo: row.cargo ?? null,
+        sistema_concorrencia: row.sistema_concorrencia ?? null,
+        classificacao: row.classificacao ?? null,
+        pretende_assumir: row.pretende_assumir ?? null,
+        ja_foi_nomeado: row.ja_foi_nomeado ?? null,
+        observacao: row.observacao ?? null,
+        status: row.status ?? null,
+      }))
+    : [];
+
   return {
     candidate: {
       id: candidate.id,
@@ -269,5 +329,8 @@ export async function loadResumoData(
     ultimasVacancias,
     ultimasNotificacoes,
     outrasAprovacoesCount,
+    outrasAprovacoes,
+    tdContent,
+    resumoConfig,
   };
 }

@@ -285,7 +285,7 @@ export function ReportsModal({ open, onOpenChange, onGenerateExport }: ReportsMo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <KanbanDialogContent size="narrow">
+      <KanbanDialogContent size="medium">
         <div className="flex h-full min-h-0 flex-col">
           <KanbanDialogHeader
             title="Relatórios rápidos"

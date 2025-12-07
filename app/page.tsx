@@ -79,8 +79,8 @@ function HeroSection({ onOpenModal }: { onOpenModal: () => void }) {
           </div>
 
           <div className="space-y-3 sm:space-y-4">
-            <p className="font-heading text-[10px] sm:text-xs tracking-[0.35em] uppercase text-red-100/90">
-              COMISSÃO TJAA · CONCURSO 2025
+            <p className="font-heading text-[10px] sm:text-xs tracking-[0.12em] text-red-100/90">
+              Comissão TJAA · Concurso 2025
             </p>
 
             <h1 className="font-heading text-[1.9rem] leading-tight text-white sm:text-3xl lg:text-[2.35rem]">
@@ -103,8 +103,8 @@ function HeroSection({ onOpenModal }: { onOpenModal: () => void }) {
               ring-1 ring-white/10
             "
           >
-            <p className="text-[11px] font-semibold tracking-[0.22em] uppercase text-red-200">
-              AMBIENTE DO APROVADO
+            <p className="text-[11px] font-semibold tracking-[0.1em] text-red-200">
+              Ambiente do aprovado
             </p>
 
             <p className="mt-3 text-xs text-zinc-100/90 sm:text-sm">

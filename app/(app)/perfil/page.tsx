@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { loadResumoData } from '@/src/app/(app)/resumo/loadResumoData'
 
-import ResumoDashboard from './ResumoDashboard'
+import ResumoDashboard from '../resumo/ResumoDashboard'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,7 +17,7 @@ type PerfilRow = {
   avatar_url?: string | null
 }
 
-export default async function ResumoPage() {
+export default async function PerfilPage() {
   const supabase = await createSupabaseServerClient()
 
   const {
@@ -36,9 +36,7 @@ export default async function ResumoPage() {
 
   if (perfilError || !perfil?.candidate_id) {
     console.error(perfilError)
-    throw new Error(
-      'Não foi possível encontrar o candidato vinculado a este usuário.',
-    )
+    throw new Error('Não foi possível encontrar o candidato vinculado a este usuário.')
   }
 
   const data = await loadResumoData(perfil.candidate_id)
@@ -57,6 +55,7 @@ export default async function ResumoPage() {
         outras_redes: perfil.outras_redes,
         avatarUrl: perfil.avatar_url,
       }}
+      variant="perfil"
     />
   )
 }

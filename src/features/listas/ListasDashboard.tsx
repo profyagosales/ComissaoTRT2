@@ -129,7 +129,7 @@ export function ListasDashboard({ data, isComissao, selectedListKey, currentCand
 
     return (
       <div className="rounded-3xl border border-zinc-200 bg-white/80 p-5 shadow-sm min-h-[520px] flex flex-col lg:h-full">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-red-500">Listas</p>
+        <p className="text-xs font-semibold tracking-[0.08em] text-red-500">Listas</p>
         <p className="mt-1 text-sm text-zinc-500">Escolha qual acompanhamento deseja abrir.</p>
         <div className="mt-4 space-y-4 flex-1">
           {ordemButton}
@@ -192,7 +192,7 @@ export function ListasDashboard({ data, isComissao, selectedListKey, currentCand
           <div className="border-b border-zinc-100 px-6 py-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-400">Acompanhamento em tempo real</p>
+                <p className="text-xs font-semibold tracking-[0.08em] text-zinc-400">Acompanhamento em tempo real</p>
                 <h2 className="text-2xl font-semibold text-zinc-900">{title}</h2>
                 <p className="text-sm text-zinc-500">Filtre por nome ou órgão para encontrar rapidamente um aprovado.</p>
               </div>

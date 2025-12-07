@@ -3,9 +3,12 @@
 import { revalidatePath } from "next/cache"
 
 import { createSupabaseServerClient } from "@/lib/supabase-server"
+import { createSupabaseServiceRoleClient } from "@/lib/supabase-service-role"
+import type { SupabaseClient } from "@supabase/supabase-js"
 import { TD_REQUEST_TIPOS, mapTipoTdToCandidateStatus } from "@/features/tds/td-types"
 import type { CandidateTdStatus, TdRequestTipo } from "@/features/tds/td-types"
-import { VACANCIA_CLASSE_LABEL, type VacanciaClasse, type VacanciaTipo } from "@/features/vacancias/vacancia-types"
+import { encodeVacanciaMetadata, decodeVacanciaMetadata } from "@/features/vacancias/vacancia-metadata"
+import { VACANCIA_CLASSE_LABEL, type VacanciaClasse, type VacanciaMetadata, type VacanciaTipo } from "@/features/vacancias/vacancia-types"
 
 type Decision = "APROVAR" | "REJEITAR"
 
@@ -36,7 +39,22 @@ type OutraAprovacaoModerationRow = {
   pretende_assumir: string | null
 }
 
-type SupabaseServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>
+type SupabaseClientLike = SupabaseClient<any, any, any>
+
+export type VacanciaUpsertResult = {
+  id: string
+  data: string | null
+  tribunal: string | null
+  cargo: string | null
+  tipo: string | null
+  classe: string | null
+  nomeServidor: string | null
+  observacao: string | null
+  douLink: string | null
+  preenchida: boolean | null
+  raw: Record<string, unknown>
+  metadata: VacanciaMetadata | null
+}
 
 type ColumnSet = Set<string> | null
 
@@ -87,7 +105,8 @@ const VACANCIA_COLUMN_ALIASES = {
   tipo: ["tipo", "tipo_evento"],
   nomeServidor: ["nome_servidor", "servidor", "nome"],
   douLink: ["dou_link", "link", "fonte_url"],
-  observacao: ["observacao", "observacoes", "detalhes"],
+  observacao: ["observacao", "observacoes", "detalhes", "observacao_texto", "observacao_vacancia"],
+  preenchida: ["preenchida", "foi_preenchida", "preenchida_flag", "ja_preenchida"],
 }
 
 function resolveFallbackColumns(cacheKey: string, tableName: string): ColumnSet {
@@ -99,7 +118,7 @@ function resolveFallbackColumns(cacheKey: string, tableName: string): ColumnSet 
   return new Set(fallbackColumns)
 }
 
-async function getTableColumns(supabase: SupabaseServerClient, table: string): Promise<ColumnSet> {
+async function getTableColumns(supabase: SupabaseClientLike, table: string): Promise<ColumnSet> {
   const [schema = "public", tableName] = table.includes(".") ? table.split(".") : ["public", table]
   const cacheKey = `${schema}.${tableName}`
   if (tableColumnCache.has(cacheKey)) {
@@ -152,7 +171,8 @@ function assignColumnIfExists(
   column: string,
   value: unknown,
 ) {
-  if (columns && !columns.has(column)) return
+  const availableColumns = columns && columns.size ? columns : null
+  if (availableColumns && !availableColumns.has(column)) return
   target[column] = value
 }
 
@@ -161,10 +181,23 @@ function assignFromAliases(
   target: Record<string, unknown>,
   aliases: string[],
   value: unknown,
+  fallback?: (column: string) => boolean,
 ) {
-  const column = columns ? aliases.find((alias) => columns.has(alias)) ?? null : aliases[0] ?? null
+  const availableColumns = columns && columns.size ? columns : null
+  let column: string | null
+
+  if (!availableColumns) {
+    column = aliases[0] ?? null
+  } else {
+    column = aliases.find((alias) => availableColumns.has(alias)) ?? null
+    if (!column && fallback) {
+      const match = Array.from(availableColumns).find((candidate) => fallback(candidate))
+      column = match ?? null
+    }
+  }
+
   if (!column) return
-  if (columns && !columns.has(column)) return
+  if (availableColumns && !availableColumns.has(column) && (!fallback || !fallback(column))) return
   target[column] = value
 }
 
@@ -179,7 +212,7 @@ function readValueFromAliases(row: Record<string, unknown>, aliases: string[]): 
 }
 
 async function applyCandidateStatusFromOutraAprovacao(
-  supabase: SupabaseServerClient,
+  supabase: SupabaseClientLike,
   approval: OutraAprovacaoModerationRow,
   referenceDate: string,
 ) {
@@ -215,7 +248,7 @@ async function applyCandidateStatusFromOutraAprovacao(
 }
 
 async function resetCandidateTdStatusIfMatches(
-  supabase: SupabaseServerClient,
+  supabase: SupabaseClientLike,
   candidateId: string,
   expectedStatus: Exclude<CandidateTdStatus, null>,
 ) {
@@ -269,7 +302,7 @@ async function assertComissaoUser(): Promise<SupabaseUser> {
 }
 
 async function enqueueResumoNotification(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  supabase: SupabaseClientLike,
   payload: NotificationPayload
 ) {
   try {
@@ -933,9 +966,10 @@ export async function upsertVacanciaAction(input: {
   douLink?: string | null
   observacao?: string | null
   shouldNotify?: boolean
-}) {
-  const supabase = await createSupabaseServerClient()
+  preenchida?: boolean | null
+}): Promise<VacanciaUpsertResult> {
   await assertComissaoUser()
+  const supabase = createSupabaseServiceRoleClient()
   const vacanciaColumns = await getTableColumns(supabase, "vacancias")
 
   const dataValue = new Date(input.data)
@@ -956,31 +990,72 @@ export async function upsertVacanciaAction(input: {
   assignFromAliases(vacanciaColumns, payload, VACANCIA_COLUMN_ALIASES.tribunal, tribunal)
   assignFromAliases(vacanciaColumns, payload, VACANCIA_COLUMN_ALIASES.cargo, cargo)
   const classeLabel = input.classe ? VACANCIA_CLASSE_LABEL[input.classe] : input.motivo?.trim() || null
-  assignFromAliases(vacanciaColumns, payload, VACANCIA_COLUMN_ALIASES.motivo, classeLabel)
   const tipoValue = typeof input.tipo === "string" ? input.tipo.trim() : null
+  const trimmedObservacao = input.observacao?.trim() || null
+  const trimmedNomeServidor = input.nomeServidor?.trim() || null
+  const trimmedDouLink = input.douLink?.trim() || null
+  const metadataPayload: VacanciaMetadata = {
+    version: 1,
+    classeKey: input.classe ?? null,
+    classeLabel,
+    observacao: trimmedObservacao,
+    preenchida: typeof input.preenchida === "boolean" ? input.preenchida : null,
+    cargo,
+    tribunal,
+    tipo: tipoValue || null,
+    douLink: trimmedDouLink,
+    nomeServidor: trimmedNomeServidor,
+  }
+  const motivoValue = encodeVacanciaMetadata(classeLabel, metadataPayload)
+  assignFromAliases(vacanciaColumns, payload, VACANCIA_COLUMN_ALIASES.motivo, motivoValue)
   assignFromAliases(vacanciaColumns, payload, VACANCIA_COLUMN_ALIASES.tipo, tipoValue || null)
   assignFromAliases(
     vacanciaColumns,
     payload,
     VACANCIA_COLUMN_ALIASES.nomeServidor,
-    input.nomeServidor?.trim() || null,
+    trimmedNomeServidor,
   )
-  assignFromAliases(vacanciaColumns, payload, VACANCIA_COLUMN_ALIASES.douLink, input.douLink?.trim() || null)
+  assignFromAliases(vacanciaColumns, payload, VACANCIA_COLUMN_ALIASES.douLink, trimmedDouLink)
   assignFromAliases(
     vacanciaColumns,
     payload,
     VACANCIA_COLUMN_ALIASES.observacao,
-    input.observacao?.trim() || null,
+    trimmedObservacao,
+    (column) => column.toLowerCase().includes("observ"),
+  )
+  assignFromAliases(
+    vacanciaColumns,
+    payload,
+    VACANCIA_COLUMN_ALIASES.preenchida,
+    typeof input.preenchida === "boolean" ? input.preenchida : null,
+    (column) => column.toLowerCase().includes("preench"),
   )
   assignColumnIfExists(vacanciaColumns, payload, "updated_at", now)
+
+  if (process.env.NODE_ENV !== "production") {
+    console.log("[vacancias] upsert payload", {
+      inputId: input.id ?? null,
+      payload,
+      motivo: motivoValue,
+      metadata: metadataPayload,
+    })
+  }
 
   let vacanciaId = input.id ?? null
 
   if (vacanciaId) {
-    const { error } = await supabase.from("vacancias").update(payload).eq("id", vacanciaId)
+    const { data: updated, error } = await supabase
+      .from("vacancias")
+      .update(payload)
+      .eq("id", vacanciaId)
+      .select("id")
+      .maybeSingle()
     if (error) {
       console.error("[upsertVacanciaAction] erro ao atualizar vacância", error)
       throw new Error("Não foi possível atualizar a vacância informada.")
+    }
+    if (!updated) {
+      throw new Error("Nenhuma vacância foi atualizada. Verifique se você possui permissão para editar este registro.")
     }
   } else {
     const insertPayload = { ...payload }
@@ -989,14 +1064,92 @@ export async function upsertVacanciaAction(input: {
       .from("vacancias")
       .insert(insertPayload)
       .select("id")
-      .single<{ id: string }>()
+      .maybeSingle<{ id: string }>()
 
-    if (error || !data) {
+    if (error) {
       console.error("[upsertVacanciaAction] erro ao criar vacância", error)
       throw new Error("Não foi possível cadastrar a vacância.")
     }
 
+    if (!data) {
+      throw new Error("Nenhuma vacância foi criada. Verifique se você possui permissão para cadastrar este registro.")
+    }
+
     vacanciaId = data.id
+  }
+
+  const { data: persistedRow, error: fetchError } = await supabase
+    .from("vacancias")
+    .select("*")
+    .eq("id", vacanciaId)
+    .maybeSingle<Record<string, unknown>>()
+
+  if (fetchError || !persistedRow) {
+    console.error("[upsertVacanciaAction] falha ao recuperar vacância após salvar", fetchError)
+    throw new Error("Vacância salva, mas não foi possível recuperar os dados atualizados.")
+  }
+
+  const resolveString = (aliases: string[]) =>
+    readValueFromAliases(persistedRow as Record<string, unknown>, aliases)
+  const resolveBoolean = (aliases: string[]): boolean | null => {
+    const value = readValueFromAliases(persistedRow as Record<string, unknown>, aliases)
+    if (value === null) {
+      const direct = aliases.find((alias) => Object.prototype.hasOwnProperty.call(persistedRow, alias))
+      const raw = direct ? (persistedRow as Record<string, unknown>)[direct] : undefined
+      if (typeof raw === "boolean") return raw
+      if (typeof raw === "number") return raw === 1 ? true : raw === 0 ? false : null
+      if (typeof raw === "string") {
+        const normalized = raw.trim().toLowerCase()
+        if (["1", "true", "sim", "s", "t"].includes(normalized)) return true
+        if (["0", "false", "nao", "não", "n", "f"].includes(normalized)) return false
+      }
+      return null
+    }
+
+    const normalized = value.trim().toLowerCase()
+    if (["1", "true", "sim", "s", "t"].includes(normalized)) return true
+    if (["0", "false", "nao", "não", "n", "f"].includes(normalized)) return false
+    return null
+  }
+
+  const rawMotivoValue = resolveString(VACANCIA_COLUMN_ALIASES.motivo)
+  const { label: metadataLabel, metadata } = decodeVacanciaMetadata(rawMotivoValue)
+
+  if (process.env.NODE_ENV !== "production") {
+    console.log("[vacancias] upsert result", {
+      raw: persistedRow,
+      motivo: rawMotivoValue,
+      metadata: metadata ?? null,
+      metadataLabel,
+    })
+    console.log("[vacancias] decoded after upsert", {
+      metadataLabel,
+      metadata,
+    })
+  }
+
+  const resolvedObservacao = metadata?.observacao ?? resolveString(VACANCIA_COLUMN_ALIASES.observacao)
+  const resolvedPreenchida =
+    metadata?.preenchida ?? resolveBoolean(VACANCIA_COLUMN_ALIASES.preenchida)
+  const resolvedCargo = metadata?.cargo ?? resolveString(VACANCIA_COLUMN_ALIASES.cargo)
+  const resolvedTribunal = metadata?.tribunal ?? resolveString(VACANCIA_COLUMN_ALIASES.tribunal)
+  const resolvedTipo = metadata?.tipo ?? resolveString(VACANCIA_COLUMN_ALIASES.tipo)
+  const resolvedNomeServidor = metadata?.nomeServidor ?? resolveString(VACANCIA_COLUMN_ALIASES.nomeServidor)
+  const resolvedDouLink = metadata?.douLink ?? resolveString(VACANCIA_COLUMN_ALIASES.douLink)
+
+  const result: VacanciaUpsertResult = {
+    id: vacanciaId,
+    data: resolveString(VACANCIA_COLUMN_ALIASES.data),
+    tribunal: resolvedTribunal,
+    cargo: resolvedCargo,
+    tipo: resolvedTipo,
+    classe: metadataLabel ?? rawMotivoValue,
+    nomeServidor: resolvedNomeServidor,
+    observacao: resolvedObservacao,
+    douLink: resolvedDouLink,
+    preenchida: resolvedPreenchida,
+    raw: persistedRow,
+    metadata,
   }
 
   if (input.shouldNotify && vacanciaId) {
@@ -1016,21 +1169,32 @@ export async function upsertVacanciaAction(input: {
   revalidatePath("/comissao")
   revalidatePath("/resumo")
   revalidatePath("/vacancias")
+
+  return result
 }
 
 export async function deleteVacanciaAction(params: { id: string }) {
-  const supabase = await createSupabaseServerClient()
   await assertComissaoUser()
+  const supabase = createSupabaseServiceRoleClient()
 
   if (!params.id) {
     throw new Error("Informe o registro que deseja remover.")
   }
 
-  const { error } = await supabase.from("vacancias").delete().eq("id", params.id)
+  const { data, error } = await supabase
+    .from("vacancias")
+    .delete()
+    .eq("id", params.id)
+    .select("id")
+    .maybeSingle<{ id: string }>()
 
   if (error) {
     console.error("[deleteVacanciaAction] erro ao remover vacância", error)
     throw new Error("Não foi possível remover essa vacância agora.")
+  }
+
+  if (!data) {
+    throw new Error("Nenhuma vacância foi removida. Verifique se você possui permissão para excluir este registro.")
   }
 
   revalidatePath("/comissao")
@@ -1110,7 +1274,6 @@ export async function cancelNotificationAction(input: { notificationId: string }
 type ExportManifest = "candidates" | "vacancias"
 
 export async function generateExportAction(input: { type: ExportManifest }) {
-  const supabase = await createSupabaseServerClient()
   await assertComissaoUser()
 
   let rows: Record<string, string | number | null>[] = []
@@ -1118,6 +1281,7 @@ export async function generateExportAction(input: { type: ExportManifest }) {
   const filename = `${input.type}-${new Date().toISOString().slice(0, 10)}.csv`
 
   if (input.type === "candidates") {
+    const supabase = await createSupabaseServerClient()
     const { data, error } = await supabase
       .from("candidates")
       .select("nome, sistema_concorrencia, classificacao_lista, status_nomeacao, td_status, td_observacao")
@@ -1146,6 +1310,7 @@ export async function generateExportAction(input: { type: ExportManifest }) {
       { key: "td_observacao", label: "Obs. TD" },
     ]
   } else if (input.type === "vacancias") {
+    const supabase = createSupabaseServiceRoleClient()
     const vacanciaColumns = await getTableColumns(supabase, "vacancias")
     const orderColumn = vacanciaColumns
       ? VACANCIA_COLUMN_ALIASES.data.find((alias) => vacanciaColumns.has(alias)) ?? undefined

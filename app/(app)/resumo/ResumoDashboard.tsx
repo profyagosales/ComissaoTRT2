@@ -1,11 +1,10 @@
 'use client'
 
+import { Pencil } from 'lucide-react'
+
 import { ResumoHero } from '@/src/components/resumo/ResumoHero'
-import type { ResumoSliderData } from '@/src/components/resumo/ResumoSlider'
-import { ConcursoInfoSlider } from '@/src/components/resumo/ConcursoInfoSlider'
-import { UltimasNotificacoesCard } from '@/src/components/resumo/UltimasNotificacoesCard'
-import { ComissaoFab } from '@/src/app/(app)/resumo/ComissaoFab'
 import type { CandidateResumoData } from '@/src/app/(app)/resumo/loadResumoData'
+import { EditarOutraAprovacaoModal } from '@/src/app/(app)/resumo/ResumoModals'
 import {
   EditarInfoModal,
   EnviarTdModal,
@@ -22,7 +21,9 @@ type Props = {
     instagram?: string | null
     facebook?: string | null
     outras_redes?: string | null
+    avatarUrl?: string | null
   }
+  variant?: 'full' | 'perfil'
 }
 
 const SISTEMA_LABELS: Record<string, string> = {
@@ -32,7 +33,15 @@ const SISTEMA_LABELS: Record<string, string> = {
   INDIGENA: 'Indígena',
 }
 
-function buildTotaisTDs(data: CandidateResumoData): ResumoSliderData['totaisTDs'] {
+type TotaisPorSistema = {
+  total: number
+  ampla: number
+  pcd: number
+  ppp: number
+  indigena: number
+}
+
+function buildTotaisTDs(data: CandidateResumoData): TotaisPorSistema {
   const totals = {
     total: 0,
     ampla: 0,
@@ -60,122 +69,131 @@ function buildTotaisTDs(data: CandidateResumoData): ResumoSliderData['totaisTDs'
 
 export default function ResumoDashboard({
   data,
-  isComissao,
   userId,
   profileContact,
-}: Props) { 
+  variant = 'full',
+}: Props) {
   const {
     candidate,
     posicoes,
     concursoResumo,
-    painelAtual,
-    ultimasNotificacoes,
-    outrasAprovacoesCount,
+    outrasAprovacoes,
+    tdContent,
+    resumoConfig,
   } = data
+
   const contato = profileContact ?? {}
-  const ordemAtual =
+  const contatoAvatar = contato.avatarUrl ?? null
+  const ordemAtualNumero =
     (candidate as { ordem_nomeacao_atual?: number | null })?.ordem_nomeacao_atual ??
     candidate.ordem_nomeacao_base ??
-    '—'
-  const perfilLabel = isComissao ? 'Perfil da comissão' : 'Perfil do aprovado'
+    null
   const concorrenciaLabel =
     SISTEMA_LABELS[candidate.sistema_concorrencia] ?? candidate.sistema_concorrencia
   const contatoEmail = contato.email ?? 'Não informado'
   const contatoTelefone = contato.telefone ?? 'Não informado'
-  const contatoRedes = 
-    [contato.instagram, contato.facebook, contato.outras_redes]
-      .filter(Boolean)
-      .join(' · ') || 'Não informado'
-  const outrasAprovacoesText = outrasAprovacoesCount
-    ? `${outrasAprovacoesCount} aprovação(ões) cadastrada(s) em outros concursos.`
-    : 'Nenhuma outra aprovação cadastrada ainda.'
-  const sliderData: ResumoSliderData = {
-    concorrenciaLabel,
-    ordemNomeacao: ordemAtual,
-    classificacaoOrigem: candidate.classificacao_lista ?? '—',
-    frenteOrdem: posicoes.candidatosNaFrenteOrdem ?? 0,
-    frenteSistema: posicoes.candidatosNaFrenteLista ?? 0,
-    totaisAprovados: {
-      total: concursoResumo.totalAprovados ?? 0,
-      ampla: concursoResumo.totalAprovadosAmpla ?? 0,
-      pcd: concursoResumo.totalAprovadosPcd ?? 0,
-      ppp: concursoResumo.totalAprovadosPpp ?? 0,
-      indigena: concursoResumo.totalAprovadosIndigena ?? 0,
-    },
-    totaisNomeados: {
-      total: concursoResumo.totalNomeados ?? 0,
-      ampla: concursoResumo.totalNomeadosAmpla ?? 0,
-      pcd: concursoResumo.totalNomeadosPcd ?? 0,
-      ppp: concursoResumo.totalNomeadosPpp ?? 0,
-      indigena: concursoResumo.totalNomeadosIndigena ?? 0,
-    },
-    totaisTDs: buildTotaisTDs(data),
+  const contatoInstagram = contato.instagram ?? 'Não informado'
+  const actionButtonClass =
+    'inline-flex items-center gap-1 rounded-full border border-white/25 bg-white/16 px-3 py-1 text-[12px] font-medium text-white/90 shadow-[0_10px_24px_rgba(0,0,0,0.24)] transition-colors hover:border-white/45 hover:bg-white/24 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60'
+  const iconActionButtonClass =
+    'inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/25 bg-white/16 text-white/85 shadow-[0_10px_24px_rgba(0,0,0,0.24)] transition-colors hover:border-white/45 hover:bg-white/24 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60'
+
+  const totaisTDs = buildTotaisTDs(data)
+  const frenteLista = posicoes.candidatosNaFrenteLista ?? 0
+  const frenteOrdem = posicoes.candidatosNaFrenteOrdem ?? 0
+
+  const heroSection = (
+    <ResumoHero
+      nome={candidate.nome}
+      email={contatoEmail}
+      telefone={contatoTelefone}
+      instagram={contatoInstagram}
+      concorrenciaLabel={concorrenciaLabel}
+      ordemNomeacaoDisplay={ordemAtualNumero}
+      classificacaoDisplay={candidate.classificacao_lista}
+      tdStatus={candidate.td_status}
+      tdObservacao={candidate.td_observacao}
+      outrasAprovacoes={outrasAprovacoes}
+      avatarUrl={contatoAvatar}
+      frenteLista={frenteLista}
+      frenteOrdem={frenteOrdem}
+      concursoResumo={concursoResumo}
+      totaisTDs={totaisTDs}
+      resumoConfig={resumoConfig}
+      editContactAction={
+        <EditarInfoModal
+          userId={userId}
+          initialTelefone={contato.telefone ?? undefined}
+          initialInstagram={contato.instagram}
+          initialFacebook={contato.facebook}
+          initialOutrasRedes={contato.outras_redes}
+          initialAvatarUrl={contato.avatarUrl}
+          trigger={
+            <button type="button" className={actionButtonClass}>
+              Editar dados
+            </button>
+          }
+        />
+      }
+      enviarTdAction={
+        <EnviarTdModal
+          candidateId={candidate.id}
+          tdContent={tdContent}
+          trigger={
+            <button type="button" className={actionButtonClass}>
+              Enviar TD
+            </button>
+          }
+        />
+      }
+      novaAprovacaoAction={
+        <MinhasAprovacoesModal
+          candidateId={candidate.id}
+          trigger={
+            <button type="button" className={actionButtonClass}>
+              Adicionar aprovação
+            </button>
+          }
+        />
+      }
+      renderOutraAprovacaoEditor={approval => (
+        <EditarOutraAprovacaoModal
+          key={`editar-${approval.id}`}
+          candidateId={candidate.id}
+          approval={approval}
+          trigger={
+            <button
+              type="button"
+              className={iconActionButtonClass}
+              aria-label="Editar aprovação"
+            >
+              <Pencil className="h-4 w-4" aria-hidden="true" />
+            </button>
+          }
+        />
+      )}
+    />
+  )
+
+  if (variant === 'perfil') {
+    return (
+      <main className="w-full space-y-6 px-2 pb-28 pt-4 sm:px-3 lg:px-4 xl:px-5">
+        {heroSection}
+      </main>
+    )
   }
 
   return (
-    <main className="w-full px-2 sm:px-3 lg:px-4 xl:px-5 space-y-6 pb-16">
-      <ResumoHero
-        nome={candidate.nome}
-        email={contatoEmail}
-        telefone={contatoTelefone}
-        redesSociais={contatoRedes}
-        perfilLabel={perfilLabel}
-        sliderData={sliderData}
-        outrasAprovacoesText={outrasAprovacoesText}
-        editContactAction={
-          <EditarInfoModal
-            userId={userId}
-            initialTelefone={contato.telefone ?? undefined}
-            initialInstagram={contato.instagram}
-            initialFacebook={contato.facebook}
-            initialOutrasRedes={contato.outras_redes}
-            trigger={
-              <button className="inline-flex min-w-[150px] items-center justify-center rounded-full bg-[#C62828] px-6 py-2.5 text-sm font-semibold text-white shadow-[0_7px_20px_rgba(198,40,40,0.3)] transition-colors hover:bg-[#a71d1d]">
-                Editar contato
-              </button>
-            }
-          />
-        }
-        enviarTdAction={
-          <EnviarTdModal
-            candidateId={candidate.id}
-            trigger={
-              <button
-                className="btn-td-pulse inline-flex min-w-[150px] items-center justify-center rounded-full border border-[#C62828] px-6 py-2.5 text-sm font-semibold shadow-[0_0_25px_rgba(198,40,40,0.4)] ring-2 ring-transparent transition-all duration-300 focus-visible:ring-2 focus-visible:ring-[#FFCDD2]"
-              >
-                Enviar TD
-              </button>
-            }
-          />
-        }
-        verEditarAprovacoesAction={
-          <MinhasAprovacoesModal
-            candidateId={candidate.id}
-            trigger={
-              <button className="inline-flex min-w-[150px] items-center justify-center rounded-full bg-[#C62828] px-6 py-2.5 text-sm font-semibold text-white shadow-[0_7px_20px_rgba(198,40,40,0.3)] transition-colors hover:bg-[#a71d1d]">
-                Ver/editar
-              </button>
-            }
-          />
-        }
-        novaAprovacaoAction={
-          <MinhasAprovacoesModal
-            candidateId={candidate.id}
-            trigger={
-              <button className="inline-flex min-w-[150px] items-center justify-center rounded-full bg-[#C62828] px-6 py-2.5 text-sm font-semibold text-white shadow-[0_7px_20px_rgba(198,40,40,0.3)] transition-colors hover:bg-[#a71d1d]">
-                + Aprovação
-              </button>
-            }
-          />
-        }
-      />
+    <main className="w-full space-y-6 px-2 pb-28 pt-4 sm:px-3 lg:px-4 xl:px-5">
+      <div className="hidden md:block">{heroSection}</div>
 
-      <section className="grid gap-6 lg:grid-cols-2">
-        <ConcursoInfoSlider painelAtual={painelAtual} concursoResumo={concursoResumo} />
-        <UltimasNotificacoesCard notificacoes={ultimasNotificacoes} />
-      </section>
+      <div className="space-y-1 md:hidden">
+        <h1 className="font-display text-lg font-semibold text-[#0f2f47]">Resumo</h1>
+        <p className="text-sm text-[#0f2f47]/70">
+          Acompanhe sua posição, notificações e critérios sem sair do painel.
+        </p>
+      </div>
 
-      <ComissaoFab isComissao={isComissao} />
     </main>
   )
 }

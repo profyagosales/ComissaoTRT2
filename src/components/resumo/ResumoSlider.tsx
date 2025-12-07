@@ -109,16 +109,16 @@ export default function ResumoSlider({ data }: Props) {
       <div className="pointer-events-none absolute -bottom-12 right-4 h-32 w-32 rounded-full bg-[#FFAB91]/18 blur-[110px]" />
 
       <div className="relative flex h-full flex-col px-7 py-6">
-        <header className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.35em] text-white/60">
-          <span>Resumo</span>
-          <span className="font-mono tracking-[0.2em]">
+        <header className="flex items-center justify-between text-[11px] uppercase tracking-[0.35em] text-white/60">
+          <span className="font-display">Resumo</span>
+          <span className="font-display tracking-[0.2em]">
             {String(index + 1).padStart(2, '0')}/{String(totalSlides).padStart(2, '0')}
           </span>
         </header>
 
         <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
-          <p className="text-[12px] uppercase tracking-[0.3em] text-[#FFAB91]">{active.titulo}</p>
-          <p className="text-3xl font-semibold leading-tight text-white drop-shadow-sm md:text-4xl">
+          <p className="font-display text-[12px] uppercase tracking-[0.3em] text-[#FFAB91]">{active.titulo}</p>
+          <p className="font-display text-3xl leading-tight text-white drop-shadow-sm md:text-4xl uppercase tracking-[0.14em]">
             {active.destaque}
           </p>
           {active.descricao && (

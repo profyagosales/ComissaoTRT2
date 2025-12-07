@@ -13,6 +13,7 @@ import type {
   upsertLoaAction,
   upsertTdContentAction,
   upsertVacanciaAction,
+  type VacanciaUpsertResult,
 } from "./comissao-actions"
 import type { createCandidateAction, saveOutraAprovacaoAction } from "@/src/features/listas/listas-actions"
 
@@ -27,7 +28,7 @@ export type ComissaoDashboardActions = {
   moderateTdRequest: typeof moderateTdRequestAction
   upsertTdContent: typeof upsertTdContentAction
   createManualTd: typeof createManualTdAction
-  upsertVacancia: typeof upsertVacanciaAction
+  upsertVacancia: (params: Parameters<typeof upsertVacanciaAction>[0]) => Promise<VacanciaUpsertResult>
   deleteVacancia: typeof deleteVacanciaAction
   enqueueCustomNotification: typeof enqueueCustomNotificationAction
   retryNotification: typeof retryNotificationAction

@@ -11,18 +11,25 @@ export async function updateUserProfileContact(input: {
   instagram?: string;
   facebook?: string;
   outras_redes?: string;
+  avatarUrl?: string | null;
 }) {
   const supabase = await createSupabaseServerClient();
 
+  const updateData: Record<string, unknown> = {
+    telefone: input.telefone ?? null,
+    instagram: input.instagram ?? null,
+    facebook: input.facebook ?? null,
+    outras_redes: input.outras_redes ?? null,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (input.avatarUrl !== undefined) {
+    updateData.avatar_url = input.avatarUrl ?? null;
+  }
+
   const { error } = await supabase
     .from("user_profiles")
-    .update({
-      telefone: input.telefone ?? null,
-      instagram: input.instagram ?? null,
-      facebook: input.facebook ?? null,
-      outras_redes: input.outras_redes ?? null,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updateData)
     .eq("user_id", input.userId);
 
   if (error) {

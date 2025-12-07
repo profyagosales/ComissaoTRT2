@@ -8,6 +8,7 @@ import { Dialog, DialogClose } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { formatDateBrMedium } from "@/lib/date-format"
+import { decodeVacanciaMetadata } from "@/features/vacancias/vacancia-metadata"
 import {
   VACANCIA_CLASSE_HELPER_TEXT,
   VACANCIA_CLASSE_LABEL,
@@ -65,8 +66,6 @@ type VacanciaFormState = {
   preenchida: boolean
 }
 
-// TODO: persist `preenchida` once the Supabase `vacancias` table exposes the column.
-
 type VacanciaFormChangeHandler = <Key extends keyof VacanciaFormState>(
   field: Key,
   value: VacanciaFormState[Key],
@@ -98,6 +97,9 @@ const inferClasseFromLabel = (value?: string | null): VacanciaClasse | "" => {
 }
 
 const resolveClasseLabel = (value?: string | null) => {
+  if (!value) return "—"
+  const { label } = decodeVacanciaMetadata(value)
+  if (label) return label
   const classe = inferClasseFromLabel(value)
   if (classe) {
     return VACANCIA_CLASSE_LABEL[classe]
@@ -121,19 +123,34 @@ const createVacanciaForm = (): VacanciaFormState => ({
   preenchida: false,
 })
 
+
 type VacanciaFormFieldsProps = {
   form: VacanciaFormState
   onChange: VacanciaFormChangeHandler
   isPending: boolean
   onDelete?: () => void
+  showNotificationToggle?: boolean
 }
 
-function VacanciaFormFields({ form, onChange, isPending, onDelete }: VacanciaFormFieldsProps) {
+function VacanciaFormFields({ form, onChange, isPending, onDelete, showNotificationToggle = true }: VacanciaFormFieldsProps) {
   const classeOptions = form.tipo ? VACANCIA_CLASSE_OPTIONS[form.tipo] : []
   const preenchidaGroupName = `preenchida-${form.id ?? "nova"}`
 
   return (
     <div className="space-y-4 text-sm">
+      {onDelete ? (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={isPending}
+            className="rounded-full border border-red-200 px-4 py-1.5 text-xs font-semibold text-red-600 transition hover:border-red-300 disabled:border-zinc-200 disabled:text-zinc-400"
+          >
+            Excluir esta vacância
+          </button>
+        </div>
+      ) : null}
+
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-1">
           <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Data</label>
@@ -236,27 +253,16 @@ function VacanciaFormFields({ form, onChange, isPending, onDelete }: VacanciaFor
         </div>
       </div>
 
-      <label className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-600">
-        <input
-          type="checkbox"
-          className="h-4 w-4 rounded border-zinc-300 text-red-600 focus:ring-red-500"
-          checked={form.shouldNotify}
-          onChange={(event) => onChange("shouldNotify", event.target.checked)}
-        />
-        Notificar aprovados sobre a atualização
-      </label>
-
-      {onDelete ? (
-        <div className="pt-2">
-          <button
-            type="button"
-            onClick={onDelete}
-            disabled={isPending}
-            className="rounded-full border border-red-200 px-4 py-2 text-xs font-semibold text-red-600 transition hover:border-red-300 disabled:border-zinc-200 disabled:text-zinc-400"
-          >
-            Remover registro
-          </button>
-        </div>
+      {showNotificationToggle ? (
+        <label className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-600">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-zinc-300 text-red-600 focus:ring-red-500"
+            checked={form.shouldNotify}
+            onChange={(event) => onChange("shouldNotify", event.target.checked)}
+          />
+          Notificar aprovados sobre a atualização
+        </label>
       ) : null}
     </div>
   )
@@ -311,7 +317,7 @@ export function NovaVacanciaModal({ open, onOpenChange, onUpsertVacancia }: Nova
 
     startTransition(async () => {
       try {
-        await onUpsertVacancia({
+        const result = await onUpsertVacancia({
           data: form.data,
           tribunal: form.tribunal.trim() || "TRT-2",
           cargo: form.cargo.trim(),
@@ -321,8 +327,12 @@ export function NovaVacanciaModal({ open, onOpenChange, onUpsertVacancia }: Nova
           douLink: form.douLink.trim() || null,
           observacao: form.observacao.trim() || null,
           shouldNotify: form.shouldNotify,
+          preenchida: form.preenchida,
         })
-        setMessage({ type: "success", text: "Vacância registrada." })
+        setMessage({
+          type: "success",
+          text: `Vacância registrada (ID ${result.id}).`,
+        })
         resetForm()
         router.refresh()
         onOpenChange(false)
@@ -343,7 +353,7 @@ export function NovaVacanciaModal({ open, onOpenChange, onUpsertVacancia }: Nova
 
   return (
     <Dialog open={open} onOpenChange={handleDialogChange}>
-      <KanbanDialogContent size="large">
+      <KanbanDialogContent size="xl">
         <form onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col">
           <KanbanDialogHeader
             title="Registrar vacância"
@@ -351,7 +361,7 @@ export function NovaVacanciaModal({ open, onOpenChange, onUpsertVacancia }: Nova
           />
 
           <KanbanDialogBody>
-            <VacanciaFormFields form={form} onChange={updateForm} isPending={isPending} />
+            <VacanciaFormFields form={form} onChange={updateForm} isPending={isPending} showNotificationToggle />
             <div className="pt-4">
               <MessageBanner state={message} />
             </div>
@@ -390,9 +400,10 @@ type VacanciasHistoryModalProps = {
 
 export function VacanciasHistoryModal({ open, onOpenChange, vacancias, onUpsertVacancia, onDeleteVacancia }: VacanciasHistoryModalProps) {
   const router = useRouter()
-  const [form, setForm] = useState<VacanciaFormState>(createVacanciaForm)
+  const [form, setForm] = useState<VacanciaFormState>(() => ({ ...createVacanciaForm(), shouldNotify: false }))
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [searchTerm, setSearchTerm] = useState("")
 
   const sorted = useMemo(() => {
     return vacancias
@@ -414,24 +425,46 @@ export function VacanciasHistoryModal({ open, onOpenChange, vacancias, onUpsertV
     })
   }
 
+  const filteredRecords = useMemo(() => {
+    const normalized = searchTerm.trim().toLowerCase()
+    if (!normalized) return sorted
+    return sorted.filter((record) => {
+      const name = record.nomeServidor?.toLowerCase() ?? ""
+      return name.includes(normalized)
+    })
+  }, [sorted, searchTerm])
+
   const selectVacancia = (record: VacanciaRecord) => {
     setForm({
       id: record.id,
       data: record.data ? record.data.slice(0, 10) : todayInputDate(),
-      tribunal: record.tribunal ?? "TRT-2",
-      cargo: record.cargo ?? "TJAA",
+      tribunal: record.metadata?.tribunal ?? record.tribunal ?? "TRT-2",
+      cargo: record.metadata?.cargo ?? record.cargo ?? "TJAA",
       tipo:
+        (record.metadata?.tipo as VacanciaTipo | null) ||
         inferTipoFromLabel(record.tipo) ||
         inferTipoFromLabel(record.motivo) ||
         (record.tipo === "ONEROSA" || record.tipo === "NAO_ONEROSA" ? (record.tipo as VacanciaTipo) : ""),
-      classe: inferClasseFromLabel(record.motivo),
-      nomeServidor: record.nomeServidor ?? "",
-      douLink: record.douLink ?? "",
-      observacao: record.observacao ?? "",
+      classe:
+        record.metadata?.classeKey ?? inferClasseFromLabel(record.motivo),
+      nomeServidor: record.metadata?.nomeServidor ?? record.nomeServidor ?? "",
+      douLink: record.metadata?.douLink ?? record.douLink ?? "",
+      observacao: record.metadata?.observacao ?? record.observacao ?? "",
       shouldNotify: false,
-      preenchida: false,
+      preenchida: record.metadata?.preenchida ?? record.preenchida ?? false,
     })
     setMessage(null)
+  }
+
+  const handleSelectChange = (value: string) => {
+    if (!value) {
+      setForm({ ...createVacanciaForm(), shouldNotify: false })
+      return
+    }
+    const record = sorted.find((item) => item.id === value)
+    if (record) {
+      selectVacancia(record)
+    }
   }
 
   const handleSubmit = (event: FormEvent) => {
@@ -458,19 +491,46 @@ export function VacanciasHistoryModal({ open, onOpenChange, vacancias, onUpsertV
 
     startTransition(async () => {
       try {
-        await onUpsertVacancia({
+        const result = await onUpsertVacancia({
           id: recordId,
           data: form.data,
           tribunal: form.tribunal,
           cargo: form.cargo,
           tipo: form.tipo,
           classe: form.classe,
-          nomeServidor: form.nomeServidor || null,
-          douLink: form.douLink || null,
-          observacao: form.observacao || null,
-          shouldNotify: form.shouldNotify,
+          nomeServidor: form.nomeServidor.trim() || null,
+          douLink: form.douLink.trim() || null,
+          observacao: form.observacao.trim() || null,
+          shouldNotify: false,
+          preenchida: form.preenchida,
         })
-        setMessage({ type: "success", text: "Registro atualizado." })
+        if (process.env.NODE_ENV !== "production") {
+          console.log("[vacancias] upsert result", result)
+          if (result.metadata) {
+            console.log("[vacancias] metadata", result.metadata)
+          }
+        }
+        const resolvedObservacao = result.metadata?.observacao ?? result.observacao ?? ""
+        const resolvedPreenchida =
+          result.metadata?.preenchida ?? result.preenchida ?? null
+        setForm((prev) => ({
+          ...prev,
+          data: result.data ? result.data.slice(0, 10) : prev.data,
+          tribunal: result.metadata?.tribunal ?? result.tribunal ?? prev.tribunal,
+          cargo: result.metadata?.cargo ?? result.cargo ?? prev.cargo,
+          tipo:
+            inferTipoFromLabel(result.tipo) || inferTipoFromLabel(result.classe) || prev.tipo,
+          classe: inferClasseFromLabel(result.classe) || prev.classe,
+          nomeServidor: result.metadata?.nomeServidor ?? result.nomeServidor ?? "",
+          douLink: result.metadata?.douLink ?? result.douLink ?? "",
+          observacao: resolvedObservacao,
+          shouldNotify: false,
+          preenchida: resolvedPreenchida ?? prev.preenchida,
+        }))
+        setMessage({
+          type: "success",
+          text: `Registro atualizado em ${new Date().toLocaleString("pt-BR")}. Observação atual: ${resolvedObservacao || "—"}. Preenchida: ${resolvedPreenchida === null ? "—" : resolvedPreenchida ? "Sim" : "Não"}.`,
+        })
         router.refresh()
       } catch (error) {
         const text = error instanceof Error ? error.message : "Erro ao atualizar vacância."
@@ -486,7 +546,7 @@ export function VacanciasHistoryModal({ open, onOpenChange, vacancias, onUpsertV
       try {
         await onDeleteVacancia({ id: recordId })
         setMessage({ type: "success", text: "Registro removido." })
-        setForm(createVacanciaForm())
+        setForm({ ...createVacanciaForm(), shouldNotify: false })
         router.refresh()
       } catch (error) {
         const text = error instanceof Error ? error.message : "Não foi possível remover."
@@ -499,12 +559,14 @@ export function VacanciasHistoryModal({ open, onOpenChange, vacancias, onUpsertV
     onOpenChange(nextOpen)
     if (!nextOpen) {
       setMessage(null)
+      setSearchTerm("")
+      setForm({ ...createVacanciaForm(), shouldNotify: false })
     }
   }
 
   return (
     <Dialog open={open} onOpenChange={handleDialogChange}>
-      <KanbanDialogContent size="wide">
+      <KanbanDialogContent size="xl">
         <form onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col">
           <KanbanDialogHeader
             title="Histórico de vacâncias"
@@ -512,42 +574,56 @@ export function VacanciasHistoryModal({ open, onOpenChange, vacancias, onUpsertV
           />
 
           <KanbanDialogBody>
-            <div className="grid gap-6 lg:grid-cols-2">
-              <div className="max-h-[60vh] space-y-2 overflow-y-auto pr-1">
-                {sorted.length === 0 ? (
-                  <p className="text-sm text-zinc-500">Nenhuma vacância registrada.</p>
-                ) : (
-                  sorted.map((record) => (
-                    <button
-                      key={record.id}
-                      type="button"
-                      onClick={() => selectVacancia(record)}
-                      className={cn(
-                        "w-full rounded-2xl border px-4 py-3 text-left text-sm transition",
-                        form.id === record.id ? "border-red-200 bg-red-50/60" : "border-zinc-100 bg-zinc-50/70 hover:border-zinc-200"
-                      )}
+            {sorted.length === 0 ? (
+              <p className="text-sm text-zinc-500">Nenhuma vacância registrada.</p>
+            ) : (
+              <div className="space-y-6">
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Vacâncias cadastradas</label>
+                    <select
+                      value={form.id ?? ""}
+                      onChange={(event) => handleSelectChange(event.target.value)}
+                      className="h-[2.4rem] w-full rounded-2xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 focus:border-red-400 focus:outline-none"
                     >
-                      <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">{record.tribunal ?? "TRT-2"}</p>
-                      <p className="text-base font-semibold text-zinc-900">{record.cargo ?? "Cargo"}</p>
-                      <p className="text-xs text-zinc-500">{resolveClasseLabel(record.motivo)}</p>
-                      <p className="text-[11px] text-zinc-400">{record.data ? formatDateBrMedium(record.data) : "Sem data"}</p>
-                    </button>
-                  ))
-                )}
-              </div>
+                      <option value="">Selecione uma vacância</option>
+                      {filteredRecords.map((record) => {
+                        const title = record.nomeServidor?.trim() || "Sem servidor vinculado"
+                        const subtitle = resolveClasseLabel(record.motivo)
+                        const date = record.data ? formatDateBrMedium(record.data) : "Sem data"
+                        return (
+                          <option key={record.id} value={record.id}>
+                            {`${title} • ${date} • ${subtitle}`}
+                          </option>
+                        )
+                      })}
+                    </select>
+                    {filteredRecords.length === 0 ? (
+                      <p className="text-xs text-zinc-500">Nenhuma vacância encontrada com esse nome.</p>
+                    ) : null}
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Buscar servidor</label>
+                    <Input
+                      value={searchTerm}
+                      onChange={(event) => setSearchTerm(event.target.value)}
+                      placeholder="Digite o nome do servidor"
+                    />
+                  </div>
+                </div>
 
-              <div>
                 <VacanciaFormFields
                   form={form}
                   onChange={updateForm}
                   isPending={isPending}
                   onDelete={form.id ? handleDelete : undefined}
+                  showNotificationToggle={false}
                 />
                 <div className="pt-4">
                   <MessageBanner state={message} />
                 </div>
               </div>
-            </div>
+            )}
           </KanbanDialogBody>
 
           <KanbanDialogFooter>

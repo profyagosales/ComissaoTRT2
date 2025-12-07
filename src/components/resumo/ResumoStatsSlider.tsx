@@ -50,10 +50,10 @@ export function ResumoStatsSlider({
     >
       <div className="flex w-full items-center justify-between gap-6 rounded-2xl bg-white/95 px-5 py-4 shadow-sm ring-1 ring-slate-200/70 backdrop-blur-sm">
         <div className="min-w-[180px] flex-1">
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">
+          <p className="font-display mb-1 text-[10px] uppercase tracking-[0.22em] text-slate-500">
             {slide.badge}
           </p>
-          <p className="text-2xl font-semibold leading-tight text-slate-900">
+          <p className="font-display text-2xl leading-tight text-slate-900 uppercase tracking-[0.14em]">
             {slide.highlight}
           </p>
           {slide.subtitle ? (
@@ -65,10 +65,10 @@ export function ResumoStatsSlider({
           <div className="grid max-w-[260px] flex-1 grid-cols-2 gap-x-4 gap-y-2 text-xs">
             {slide.items.map(item => (
               <div key={item.label} className="space-y-0.5">
-                <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-slate-500">
+                <p className="font-display text-[10px] uppercase tracking-[0.16em] text-slate-500">
                   {item.label}
                 </p>
-                <p className="text-sm font-semibold text-slate-900">{item.value}</p>
+                <p className="font-display text-sm text-slate-900 uppercase tracking-[0.1em]">{item.value}</p>
               </div>
             ))}
           </div>

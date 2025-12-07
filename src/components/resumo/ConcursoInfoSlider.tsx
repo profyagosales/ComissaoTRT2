@@ -80,13 +80,13 @@ export function ConcursoInfoSlider({ painelAtual, concursoResumo }: Props) {
   return (
     <div className="w-full h-[420px] flex flex-col rounded-[28px] bg-white/90 ring-1 ring-black/5 shadow-md shadow-black/10 overflow-hidden">
       <div className="bg-[#C62828] px-6 py-4 flex items-center justify-center text-center">
-        <p className="text-xs font-semibold tracking-[0.15em] uppercase text-white">Informações do concurso</p>
+        <p className="font-display text-xs tracking-[0.18em] uppercase text-white">Informações do concurso</p>
       </div>
 
       <div className="flex-1 px-8 py-6 overflow-y-auto flex flex-col items-center text-center gap-4">
-        <p className="text-[11px] font-semibold tracking-[0.18em] uppercase text-[#C62828]">{active.titulo}</p>
+        <p className="font-display text-[11px] tracking-[0.22em] uppercase text-[#C62828]">{active.titulo}</p>
 
-        <p className="text-3xl md:text-4xl font-semibold text-slate-900 leading-tight">{active.destaque}</p>
+        <p className="font-display text-3xl md:text-4xl leading-tight text-slate-900 uppercase tracking-[0.12em]">{active.destaque}</p>
 
         <p className="text-sm text-slate-600 leading-relaxed">{active.descricao}</p>
       </div>
