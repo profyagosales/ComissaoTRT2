@@ -304,16 +304,11 @@ export function EditarInfoModal(props: EditarInfoModalProps) {
       throw new Error('Não foi possível salvar a nova foto de perfil.')
     }
 
-    const { data: publicData, error: publicError } = supabaseBrowser.storage
+    const publicResult = supabaseBrowser.storage
       .from('avatars')
       .getPublicUrl(filePath)
 
-    if (publicError) {
-      console.error('Erro ao gerar URL pública do avatar:', publicError)
-      throw new Error('Não foi possível salvar a nova foto de perfil.')
-    }
-
-    const publicUrl = publicData?.publicUrl ?? null
+    const publicUrl = publicResult.data?.publicUrl ?? null
 
     if (!publicUrl) {
       throw new Error('Não foi possível salvar a nova foto de perfil.')
