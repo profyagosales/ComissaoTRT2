@@ -310,6 +310,15 @@ export async function loadResumoData(
       }))
     : [];
 
+  const ultimasNomeacoesList = Array.isArray(ultimasNomeacoes) ? ultimasNomeacoes : []
+  const ultimosTDsList = Array.isArray(ultimosTDs) ? ultimosTDs : []
+  const ultimasVacanciasList = Array.isArray(ultimasVacancias) ? ultimasVacancias : []
+  const ultimasNotificacoesList = Array.isArray(ultimasNotificacoes) ? ultimasNotificacoes : []
+  const outrasAprovacoesCountValue =
+    typeof outrasAprovacoesCount === "number" && Number.isFinite(outrasAprovacoesCount)
+      ? outrasAprovacoesCount
+      : 0
+
   return {
     candidate: {
       id: candidate.id,
@@ -324,11 +333,11 @@ export async function loadResumoData(
     posicoes,
     concursoResumo,
     painelAtual,
-    ultimasNomeacoes: Array.isArray(ultimasNomeacoes) ? ultimasNomeacoes : [],
-    ultimosTDs: Array.isArray(ultimosTDs) ? ultimosTDs : [],
-    ultimasVacancias: Array.isArray(ultimasVacancias) ? ultimasVacancias : [],
-    ultimasNotificacoes: Array.isArray(ultimasNotificacoes) ? ultimasNotificacoes : [],
-    outrasAprovacoesCount,
+    ultimasNomeacoes: ultimasNomeacoesList,
+    ultimosTDs: ultimosTDsList,
+    ultimasVacancias: ultimasVacanciasList,
+    ultimasNotificacoes: ultimasNotificacoesList,
+    outrasAprovacoesCount: outrasAprovacoesCountValue,
     outrasAprovacoes,
     tdContent,
     resumoConfig,
