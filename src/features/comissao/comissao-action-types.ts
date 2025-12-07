@@ -13,8 +13,8 @@ import type {
   upsertLoaAction,
   upsertTdContentAction,
   upsertVacanciaAction,
-  type VacanciaUpsertResult,
 } from "./comissao-actions"
+import type { VacanciaUpsertResult } from "./comissao-actions"
 import type { createCandidateAction, saveOutraAprovacaoAction } from "@/src/features/listas/listas-actions"
 
 export type ComissaoDashboardActions = {
