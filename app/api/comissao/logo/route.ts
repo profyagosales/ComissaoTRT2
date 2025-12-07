@@ -10,7 +10,7 @@ const COMISSAO_RESUMO_ID = 1
 const COMISSAO_ASSETS_BUCKET = "comissao_assets"
 const FALLBACK_FILE_PATH = path.join(process.cwd(), "public", "logo-tjaa-trt2.png")
 
-let cachedFallback: Buffer | null = null
+let cachedFallback: ArrayBuffer | null = null
 
 export async function GET(request: NextRequest) {
   try {
@@ -50,8 +50,7 @@ async function fetchCommissionLogo() {
     return null
   }
 
-  const { data: file, error: downloadError } = await serviceClient
-    .storage
+  const { data: file, error: downloadError } = await serviceClient.storage
     .from(COMISSAO_ASSETS_BUCKET)
     .download(config.logo_storage_path)
 
@@ -60,25 +59,28 @@ async function fetchCommissionLogo() {
   }
 
   const arrayBuffer = await file.arrayBuffer()
-  const buffer = Buffer.from(arrayBuffer)
   const contentType = inferLogoMimeFromPath(config.logo_storage_path)
 
-  return new NextResponse(buffer, {
+  return new NextResponse(arrayBuffer, {
     status: 200,
     headers: buildHeaders({
       contentType,
-      contentLength: buffer.byteLength,
+      contentLength: arrayBuffer.byteLength,
       etag: config.updated_at ?? undefined,
     }),
   })
 }
 
-async function loadFallbackBuffer(): Promise<Buffer> {
+async function loadFallbackBuffer(): Promise<ArrayBuffer> {
   if (cachedFallback) {
     return cachedFallback
   }
 
-  cachedFallback = await readFile(FALLBACK_FILE_PATH)
+  const fileBuffer = await readFile(FALLBACK_FILE_PATH)
+  cachedFallback = fileBuffer.buffer.slice(
+    fileBuffer.byteOffset,
+    fileBuffer.byteOffset + fileBuffer.byteLength,
+  )
   return cachedFallback
 }
 
