@@ -2,7 +2,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server"
 import type { TdRequestTipo } from "@/features/tds/td-types"
 import { DEFAULT_TD_CONTENT, type TdContentSettings } from "@/features/tds/td-content"
 import { decodeVacanciaMetadata } from "@/features/vacancias/vacancia-metadata"
-import type { VacanciaClasse, VacanciaMetadata, VacanciaTipo } from "@/features/vacancias/vacancia-types"
+import type { VacanciaMetadata } from "@/features/vacancias/vacancia-types"
 
 type OutraAprovacaoQueryRow = {
   id: string

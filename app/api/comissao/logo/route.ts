@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { readFile } from "node:fs/promises"
 import path from "node:path"
 
@@ -12,7 +12,7 @@ const FALLBACK_FILE_PATH = path.join(process.cwd(), "public", "logo-tjaa-trt2.pn
 
 let cachedFallback: ArrayBuffer | null = null
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const logoResponse = await fetchCommissionLogo()
     if (logoResponse) {

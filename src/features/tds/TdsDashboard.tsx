@@ -20,11 +20,6 @@ type SortState = Record<SortableColumn, SortDirection | null>
 const PAGE_SIZE_OPTIONS: readonly PageSizeOption[] = [5, 10, 20, 30, 50, 100, "ALL"] as const
 
 // removed variant border helpers — buttons no longer show borders
-
-const numberFormatter = new Intl.NumberFormat("pt-BR", {
-  maximumFractionDigits: 0,
-})
-
 export type CurrentCandidateSummary = {
   id: string
   nome: string
@@ -852,7 +847,6 @@ function StatusDonut({ title, data, highlightKey }: StatusDonutProps) {
 
   const radius = 38
   const circumference = 2 * Math.PI * radius
-  let cumulative = 0
 
   const resetSegment = () => setActiveSegment(null)
 
@@ -869,34 +863,43 @@ function StatusDonut({ title, data, highlightKey }: StatusDonutProps) {
             stroke="rgba(255,255,255,0.25)"
             strokeWidth="12"
           />
-          {data.segments.map(segment => {
-            if (!segment.value || !total) return null
-            const segmentLength = (segment.value / total) * circumference
-            const dashArray = `${segmentLength} ${circumference - segmentLength}`
-            const isHighlighted = highlightSegment === segment.key
-            const strokeWidth = isHighlighted ? 14 : 12
-            const opacity = isHighlighted ? 1 : 0.7
-            const element = (
-              <circle
-                key={`segment-${title}-${segment.key}`}
-                cx="60"
-                cy="60"
-                r={radius}
-                fill="transparent"
-                stroke={segment.color}
-                strokeWidth={strokeWidth}
-                strokeDasharray={dashArray}
-                strokeDashoffset={-cumulative}
-                strokeLinecap="round"
-                className="cursor-pointer transition-[stroke-dashoffset,stroke-width,opacity] duration-500 ease-out"
-                style={{ transformOrigin: "60px 60px", transform: "rotate(-90deg)", opacity }}
-                onMouseEnter={() => setActiveSegment(segment.key)}
-                onClick={() => setActiveSegment(prev => (prev === segment.key ? null : segment.key))}
-              />
-            )
-            cumulative += segmentLength
-            return element
-          })}
+          {data.segments.reduce(
+            (acc, segment) => {
+              if (!segment.value || !total) {
+                return acc
+              }
+
+              const segmentLength = (segment.value / total) * circumference
+              const dashArray = `${segmentLength} ${circumference - segmentLength}`
+              const dashOffset = -acc.cumulative
+              const isHighlighted = highlightSegment === segment.key
+              const strokeWidth = isHighlighted ? 14 : 12
+              const opacity = isHighlighted ? 1 : 0.7
+
+              acc.cumulative += segmentLength
+              acc.elements.push(
+                <circle
+                  key={`segment-${title}-${segment.key}`}
+                  cx="60"
+                  cy="60"
+                  r={radius}
+                  fill="transparent"
+                  stroke={segment.color}
+                  strokeWidth={strokeWidth}
+                  strokeDasharray={dashArray}
+                  strokeDashoffset={dashOffset}
+                  strokeLinecap="round"
+                  className="cursor-pointer transition-[stroke-dashoffset,stroke-width,opacity] duration-500 ease-out"
+                  style={{ transformOrigin: "60px 60px", transform: "rotate(-90deg)", opacity }}
+                  onMouseEnter={() => setActiveSegment(segment.key)}
+                  onClick={() => setActiveSegment(prev => (prev === segment.key ? null : segment.key))}
+                />,
+              )
+
+              return acc
+            },
+            { cumulative: 0, elements: [] as ReactNode[] },
+          ).elements}
         </svg>
         <div className="pointer-events-none absolute flex flex-col items-center text-center font-['Aller']">
           <span className="text-[10px] uppercase tracking-[0.18em] text-white/80">{displayedLabel}</span>
@@ -925,25 +928,6 @@ function formatModelLabelForButton(rawLabel?: string | null) {
   const fallback = rawLabel?.trim() || "Termo de desistência"
   if (fallback.length <= MAX_MODEL_LABEL_LENGTH) return fallback
   return `${fallback.slice(0, MAX_MODEL_LABEL_LENGTH - 1).trimEnd()}…`
-}
-
-function formatHeaderLabel(label: string) {
-  return label
-    .split(" ")
-    .filter(Boolean)
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ")
-}
-
-const tdStatusThemes: Record<TdRequestTipo, { label: string; className: string }> = {
-  ENVIADO: {
-    label: "ENVIADO",
-    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  },
-  INTERESSE: {
-    label: "TALVEZ",
-    className: "border-amber-200 bg-amber-50 text-amber-700",
-  },
 }
 
 const friendlyDateFormatter = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", year: "numeric" })

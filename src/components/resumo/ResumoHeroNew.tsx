@@ -47,7 +47,6 @@ export type ResumoHeroProps = {
   instagram?: string | null
   concorrenciaLabel: string
   frenteLista: number
-  frenteOrdem: number
   ordemNomeacaoDisplay?: number | null
   classificacaoDisplay?: number | null
   tdStatus?: string | null
@@ -77,7 +76,6 @@ export function ResumoHero({
   instagram,
   concorrenciaLabel,
   frenteLista,
-  frenteOrdem,
   ordemNomeacaoDisplay,
   classificacaoDisplay,
   tdStatus,
@@ -227,9 +225,6 @@ export function ResumoHero({
           resumoConfig={resumoConfig}
           concursoResumo={concursoResumo}
           totaisTDs={totaisTDs}
-          frenteLista={frenteLista}
-          frenteOrdem={frenteOrdem}
-          ordemNomeacao={ordemNomeacaoDisplay ?? null}
         />
       </div>
     </div>
@@ -240,16 +235,10 @@ function ResumoConcursoCard({
   resumoConfig,
   concursoResumo,
   totaisTDs,
-  frenteLista,
-  frenteOrdem,
-  ordemNomeacao,
 }: {
   resumoConfig?: ComissaoResumoConfig | null
   concursoResumo: ConcursoResumoStats
   totaisTDs: SistemaTotals
-  frenteLista: number
-  frenteOrdem: number
-  ordemNomeacao: number | null
 }) {
   const logoUrl = getCommissionLogoRelativeUrl(resumoConfig)
   const homologadoEm = formatDateBrMedium(resumoConfig?.homologado_em)

@@ -201,7 +201,7 @@ export function EditarInfoModal(props: EditarInfoModalProps) {
   const [facebook, setFacebook] = useState(props.initialFacebook ?? '')
   const [outras, setOutras] = useState(props.initialOutrasRedes ?? '')
   const [error, setError] = useState<string | null>(null)
-  const [isPending, startTransition] = useTransition()
+  const [isPending, beginTransition] = useTransition()
   const [avatarPreview, setAvatarPreview] = useState<string | null>(props.initialAvatarUrl ?? null)
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarRemoved, setAvatarRemoved] = useState(false)
@@ -220,12 +220,11 @@ export function EditarInfoModal(props: EditarInfoModalProps) {
     }
 
     // Reset avatar preview and controls whenever the modal reabre.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setAvatarPreview(props.initialAvatarUrl ?? null)
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setAvatarFile(null)
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setAvatarRemoved(false)
+    React.startTransition(() => {
+      setAvatarPreview(props.initialAvatarUrl ?? null)
+      setAvatarFile(null)
+      setAvatarRemoved(false)
+    })
   }, [open, props.initialAvatarUrl])
 
   useEffect(() => {
@@ -339,7 +338,7 @@ export function EditarInfoModal(props: EditarInfoModalProps) {
     e.preventDefault()
     setError(null)
 
-    startTransition(async () => {
+    beginTransition(async () => {
       const previousAvatarUrl = props.initialAvatarUrl ?? null
       const shouldRemoveAvatar = avatarRemoved && !avatarFile
       let uploadedAvatar: { publicUrl: string; storagePath: string } | null = null
@@ -570,7 +569,7 @@ export function EnviarTdModal({ trigger, candidateId, tdContent }: EnviarTdModal
   const [tipoTd, setTipoTd] = useState<TdRequestTipo>('INTERESSE')
   const [observacao, setObservacao] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [isPending, startTransition] = useTransition()
+  const [isPending, beginTransition] = useTransition()
   const router = useRouter()
   const { showToast } = useToast()
 
@@ -597,7 +596,7 @@ export function EnviarTdModal({ trigger, candidateId, tdContent }: EnviarTdModal
     e.preventDefault()
     setError(null)
 
-    startTransition(async () => {
+    beginTransition(async () => {
       try {
         await createTdRequest({
           tipoTd,
@@ -776,7 +775,7 @@ export function MinhasAprovacoesModal({
   const [jaNomeadoStatus, setJaNomeadoStatus] = useState<NomeacaoStatusOption | ''>('')
   const [observacao, setObservacao] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [isPending, startTransition] = useTransition()
+  const [isPending, beginTransition] = useTransition()
   const router = useRouter()
   const { showToast } = useToast()
 
@@ -835,7 +834,7 @@ export function MinhasAprovacoesModal({
       return
     }
 
-    startTransition(async () => {
+    beginTransition(async () => {
       try {
         const observacaoPayload = composeObservacaoWithStatus(
           jaNomeado === 'SIM' ? jaNomeadoStatus : '',
@@ -1110,7 +1109,7 @@ export function EditarOutraAprovacaoModal({
   )
   const [observacao, setObservacao] = useState(parsedObservacao.observation)
   const [error, setError] = useState<string | null>(null)
-  const [isPending, startTransition] = useTransition()
+  const [isPending, beginTransition] = useTransition()
   const router = useRouter()
   const { showToast } = useToast()
 
@@ -1119,19 +1118,21 @@ export function EditarOutraAprovacaoModal({
       return
     }
 
-    setOrgao(approval.orgao ?? '')
-    setCargo(initialCargo)
-    setCargoOption(initialCargoOption)
-    setCustomCargo(initialCustomCargo)
-    setSistema((approval.sistema_concorrencia as 'AC' | 'PCD' | 'PPP' | 'INDIGENA') ?? 'AC')
-    setClassificacao(approval.classificacao ? String(approval.classificacao) : '')
-    setPretendeAssumir(
-      (approval.pretende_assumir as 'SIM' | 'NAO' | 'INDEFINIDO') ?? 'INDEFINIDO',
-    )
-    setJaNomeado(initialJaNomeado)
-    setJaNomeadoStatus(parsedObservacao.status)
-    setObservacao(parsedObservacao.observation)
-    setError(null)
+    React.startTransition(() => {
+      setOrgao(approval.orgao ?? '')
+      setCargo(initialCargo)
+      setCargoOption(initialCargoOption)
+      setCustomCargo(initialCustomCargo)
+      setSistema((approval.sistema_concorrencia as 'AC' | 'PCD' | 'PPP' | 'INDIGENA') ?? 'AC')
+      setClassificacao(approval.classificacao ? String(approval.classificacao) : '')
+      setPretendeAssumir(
+        (approval.pretende_assumir as 'SIM' | 'NAO' | 'INDEFINIDO') ?? 'INDEFINIDO',
+      )
+      setJaNomeado(initialJaNomeado)
+      setJaNomeadoStatus(parsedObservacao.status)
+      setObservacao(parsedObservacao.observation)
+      setError(null)
+    })
   }, [
     approval.classificacao,
     approval.cargo,
@@ -1204,7 +1205,7 @@ export function EditarOutraAprovacaoModal({
       return
     }
 
-    startTransition(async () => {
+    beginTransition(async () => {
       try {
         const observacaoPayload = composeObservacaoWithStatus(
           jaNomeado === 'SIM' ? jaNomeadoStatus : '',

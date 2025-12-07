@@ -39,7 +39,7 @@ type OutraAprovacaoModerationRow = {
   pretende_assumir: string | null
 }
 
-type SupabaseClientLike = SupabaseClient<any, any, any>
+type SupabaseClientLike = SupabaseClient<unknown, "public", unknown>
 
 export type VacanciaUpsertResult = {
   id: string

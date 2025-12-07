@@ -1,6 +1,16 @@
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from 'react'
 import { CheckCircle2, Info, X, XCircle } from 'lucide-react'
 
 type ToastVariant = 'success' | 'error' | 'info'
@@ -43,7 +53,7 @@ const variantStyles: Record<ToastVariant, { container: string; iconClass: string
   },
 }
 
-const variantIcon: Record<ToastVariant, JSX.Element> = {
+const variantIcon: Record<ToastVariant, ReactElement> = {
   success: <CheckCircle2 className="h-5 w-5" aria-hidden="true" />,
   error: <XCircle className="h-5 w-5" aria-hidden="true" />,
   info: <Info className="h-5 w-5" aria-hidden="true" />,

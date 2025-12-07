@@ -100,7 +100,6 @@ export default function ResumoDashboard({
 
   const totaisTDs = buildTotaisTDs(data)
   const frenteLista = posicoes.candidatosNaFrenteLista ?? 0
-  const frenteOrdem = posicoes.candidatosNaFrenteOrdem ?? 0
 
   const heroSection = (
     <ResumoHero
@@ -116,7 +115,6 @@ export default function ResumoDashboard({
       outrasAprovacoes={outrasAprovacoes}
       avatarUrl={contatoAvatar}
       frenteLista={frenteLista}
-      frenteOrdem={frenteOrdem}
       concursoResumo={concursoResumo}
       totaisTDs={totaisTDs}
       resumoConfig={resumoConfig}

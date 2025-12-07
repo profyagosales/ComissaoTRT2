@@ -1,7 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, useTransition } from "react"
-import type React from "react"
+import React, { useCallback, useEffect, useRef, useState, useTransition } from "react"
 import type { ReactNode } from "react"
 import { useRouter } from "next/navigation"
 
@@ -54,11 +53,11 @@ export function ComissaoLogoModal({ open, onOpenChange }: ComissaoLogoModalProps
   const [message, setMessage] = useState<MessageState>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [isPending, startTransition] = useTransition()
+  const [isPending, beginTransition] = useTransition()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const previewUrlRef = useRef<string | null>(null)
 
-  const resetSelection = () => {
+  const resetSelection = useCallback(() => {
     if (previewUrlRef.current) {
       URL.revokeObjectURL(previewUrlRef.current)
       previewUrlRef.current = null
@@ -69,9 +68,9 @@ export function ComissaoLogoModal({ open, onOpenChange }: ComissaoLogoModalProps
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
-  }
+  }, [])
 
-  const loadConfig = async () => {
+  const loadConfig = useCallback(async () => {
     setIsLoading(true)
     setMessage(null)
     try {
@@ -83,17 +82,18 @@ export function ComissaoLogoModal({ open, onOpenChange }: ComissaoLogoModalProps
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     if (!open) {
       return
     }
 
-    loadConfig()
-    resetSelection()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
+    React.startTransition(() => {
+      resetSelection()
+      void loadConfig()
+    })
+  }, [loadConfig, open, resetSelection])
 
   useEffect(() => {
     return () => {
@@ -165,7 +165,7 @@ export function ComissaoLogoModal({ open, onOpenChange }: ComissaoLogoModalProps
       return
     }
 
-    startTransition(async () => {
+    beginTransition(async () => {
       try {
         await uploadComissaoLogo(selectedFile)
         showToast("Logo atualizada com sucesso.", { variant: "success" })
@@ -181,7 +181,7 @@ export function ComissaoLogoModal({ open, onOpenChange }: ComissaoLogoModalProps
 
   const handleRemove = () => {
     setMessage(null)
-    startTransition(async () => {
+    beginTransition(async () => {
       try {
         await removeComissaoLogo()
         showToast("Logo removida.", { variant: "success" })
@@ -297,9 +297,9 @@ export function ComissaoValidadeModal({ open, onOpenChange }: ComissaoValidadeMo
     validoAteProrrogado: "",
   })
   const [message, setMessage] = useState<MessageState>(null)
-  const [isPending, startTransition] = useTransition()
+  const [isPending, beginTransition] = useTransition()
 
-  const loadConfig = async () => {
+  const loadConfig = useCallback(async () => {
     setMessage(null)
     try {
       const data = await getComissaoResumoConfig()
@@ -314,14 +314,16 @@ export function ComissaoValidadeModal({ open, onOpenChange }: ComissaoValidadeMo
       const text = error instanceof Error ? error.message : "Não foi possível carregar as datas atuais."
       setMessage({ type: "error", text })
     }
-  }
+  }, [])
 
   useEffect(() => {
     if (!open) {
       return
     }
-    loadConfig()
-  }, [open])
+    React.startTransition(() => {
+      void loadConfig()
+    })
+  }, [loadConfig, open])
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault()
@@ -334,7 +336,7 @@ export function ComissaoValidadeModal({ open, onOpenChange }: ComissaoValidadeMo
       }
     }
 
-    startTransition(async () => {
+    beginTransition(async () => {
       try {
         await updateComissaoResumoConfig({
           homologado_em: form.homologadoEm || null,
@@ -480,9 +482,9 @@ function SimpleFieldModal({
   const { showToast } = useToast()
   const [value, setValue] = useState("")
   const [message, setMessage] = useState<MessageState>(null)
-  const [isPending, startTransition] = useTransition()
+  const [isPending, beginTransition] = useTransition()
 
-  const loadConfig = async () => {
+  const loadConfig = useCallback(async () => {
     setMessage(null)
     try {
       const data = await getComissaoResumoConfig()
@@ -492,20 +494,22 @@ function SimpleFieldModal({
       const text = error instanceof Error ? error.message : "Não foi possível carregar a configuração."
       setMessage({ type: "error", text })
     }
-  }
+  }, [fieldKey])
 
   useEffect(() => {
     if (!open) {
       return
     }
-    loadConfig()
-  }, [open])
+    React.startTransition(() => {
+      void loadConfig()
+    })
+  }, [loadConfig, open])
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault()
     setMessage(null)
 
-    startTransition(async () => {
+    beginTransition(async () => {
       try {
         const payload: ComissaoResumoUpdateInput = {
           [fieldKey]: value.trim() || null,
@@ -737,7 +741,7 @@ export function LoaModal({ open, onOpenChange, loas, onUpsertLoa }: LoaModalProp
   const router = useRouter()
   const [selectedId, setSelectedId] = useState<string | null>(loas[0]?.id ?? null)
   const [message, setMessage] = useState<MessageState>(null)
-  const [isPending, startTransition] = useTransition()
+  const [isPending, beginTransition] = useTransition()
   const [form, setForm] = useState<LoaFormState>(buildLoaFormState(loas[0] ?? null))
 
   const selectLoa = (id: string | null) => {
@@ -781,7 +785,7 @@ export function LoaModal({ open, onOpenChange, loas, onUpsertLoa }: LoaModalProp
       return
     }
 
-    startTransition(async () => {
+    beginTransition(async () => {
       try {
         await onUpsertLoa({
           id: form.id,
@@ -926,7 +930,7 @@ export function CsjtModal({ open, onOpenChange, autorizacoes, loas, onUpsertCsjt
   const router = useRouter()
   const [selectedId, setSelectedId] = useState<string | null>(autorizacoes[0]?.id ?? null)
   const [message, setMessage] = useState<MessageState>(null)
-  const [isPending, startTransition] = useTransition()
+  const [isPending, beginTransition] = useTransition()
   const [form, setForm] = useState<CsjtFormState>(buildCsjtFormState(autorizacoes[0] ?? null))
   const [destinos, setDestinos] = useState<DestinoFormState[]>(buildDestinosFromRecord(autorizacoes[0] ?? null))
 
@@ -993,7 +997,7 @@ export function CsjtModal({ open, onOpenChange, autorizacoes, loas, onUpsertCsjt
       return
     }
 
-    startTransition(async () => {
+    beginTransition(async () => {
       try {
         await onUpsertCsjtAuthorization({
           id: form.id,
@@ -1193,7 +1197,7 @@ export function CargosVagosModal({ open, onOpenChange, registros, onUpsertCargos
   const router = useRouter()
   const [selectedId, setSelectedId] = useState<string | null>(registros[0]?.id ?? null)
   const [message, setMessage] = useState<MessageState>(null)
-  const [isPending, startTransition] = useTransition()
+  const [isPending, beginTransition] = useTransition()
   const [form, setForm] = useState<CargosFormState>(buildCargosFormState(registros[0] ?? null))
 
   const selectRegistro = (id: string | null) => {
@@ -1233,7 +1237,7 @@ export function CargosVagosModal({ open, onOpenChange, registros, onUpsertCargos
       return
     }
 
-    startTransition(async () => {
+    beginTransition(async () => {
       try {
         await onUpsertCargosVagos({
           id: form.id,

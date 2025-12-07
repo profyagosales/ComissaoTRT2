@@ -7,8 +7,6 @@ import {
   inferLogoMimeFromPath,
 } from "@/src/features/comissao/logo-utils"
 
-const FALLBACK_ICON = "/logo-tjaa-trt2.png"
-
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
   const config = await fetchComissaoResumoConfig()
   const baseUrl = await getRequestBaseUrl()
