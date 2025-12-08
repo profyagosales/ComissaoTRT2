@@ -12,7 +12,7 @@ export type TdItem = {
   nome_candidato: string
   sistema_concorrencia: SistemaConcorrencia
   classificacao_lista: number | null
-  ordem_nomeacao_base: number | null
+  ordem_nomeacao_base: number | string | null
   avatar_url: string | null
 }
 
@@ -120,7 +120,10 @@ async function fetchApprovedTdItems(supabase: Awaited<ReturnType<typeof createSu
         avatar_url: null, // candidatos não possuem avatar registrado na view
         sistema_concorrencia: normalizeSistema(row.sistema_concorrencia ?? null),
         classificacao_lista: row.classificacao_lista,
-        ordem_nomeacao_base: row.ordem_nomeacao_base,
+        ordem_nomeacao_base:
+          typeof row.ordem_nomeacao_base === "number" || typeof row.ordem_nomeacao_base === "string"
+            ? row.ordem_nomeacao_base
+            : null,
       }
     })
     .filter((item) => item.tipo_td !== null)

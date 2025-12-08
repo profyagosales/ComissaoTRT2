@@ -435,7 +435,7 @@ export async function loadComissaoData(): Promise<ComissaoDashboardData> {
     new Set(
       csjtRows
         .map((row) => row.loa_id)
-        .filter((value): value is string => Boolean(value) && !loaMap.has(value))
+        .filter((value): value is string => typeof value === "string" && !loaMap.has(value))
     )
   )
 

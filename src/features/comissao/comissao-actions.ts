@@ -39,7 +39,8 @@ type OutraAprovacaoModerationRow = {
   pretende_assumir: string | null
 }
 
-type SupabaseClientLike = SupabaseClient<unknown, "public", unknown>
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SupabaseClientLike = SupabaseClient<any, any, any>
 
 export type VacanciaUpsertResult = {
   id: string
@@ -59,6 +60,11 @@ export type VacanciaUpsertResult = {
 type ColumnSet = Set<string> | null
 
 const tableColumnCache = new Map<string, ColumnSet>()
+
+type CandidateUpdateRow = {
+  td_status: CandidateTdStatus | null
+  td_observacao: string | null
+}
 
 const TABLE_COLUMN_FALLBACKS: Record<string, string[]> = {
   "public.csjt_autorizacoes": [
@@ -132,10 +138,30 @@ async function getTableColumns(supabase: SupabaseClientLike, table: string): Pro
       .eq("table_schema", schema)
       .eq("table_name", tableName)
 
-    if (!error && data && data.length) {
-      const columns = new Set(data.map((row) => row.column_name as string))
-      tableColumnCache.set(cacheKey, columns)
-      return columns
+    if (!error && Array.isArray(data) && data.length) {
+      const columns = new Set(
+        data
+          .map((row) => {
+            const column = (row as { column_name?: unknown }).column_name
+            return typeof column === "string" ? column : null
+          })
+          .filter((column): column is string => Boolean(column)),
+      )
+
+      if (columns.size) {
+        tableColumnCache.set(cacheKey, columns)
+        return columns
+      }
+
+      if (process.env.NODE_ENV === "development") {
+        console.warn(
+          `[comissao-actions] information_schema.columns retornou dados sem column_name para ${cacheKey}`,
+        )
+      }
+
+      const fallback = resolveFallbackColumns(cacheKey, tableName)
+      tableColumnCache.set(cacheKey, fallback)
+      return fallback
     }
   } catch (error) {
     console.error(`[comissao-actions] falha ao ler information_schema para ${cacheKey}`, error)
@@ -239,7 +265,10 @@ async function applyCandidateStatusFromOutraAprovacao(
 
   const { error } = await supabase
     .from("candidates")
-    .update({ td_status: tdStatus, td_observacao: obs })
+    .update({
+      td_status: tdStatus,
+      td_observacao: obs,
+    })
     .eq("id", approval.candidate_id)
 
   if (error) {
@@ -269,7 +298,10 @@ async function resetCandidateTdStatusIfMatches(
 
   const { error: resetError } = await supabase
     .from("candidates")
-    .update({ td_status: null, td_observacao: null })
+    .update({
+      td_status: null,
+      td_observacao: null,
+    })
     .eq("id", candidateId)
 
   if (resetError) {
@@ -1223,7 +1255,7 @@ export async function enqueueCustomNotificationAction(input: {
     corpo,
     tipo: input.tipo ?? "CUSTOM",
     visivelPara: input.visivelPara ?? "APROVADOS",
-    metadata: input.metadata ?? null,
+    metadata: input.metadata ?? undefined,
   })
 
   revalidatePath("/comissao")

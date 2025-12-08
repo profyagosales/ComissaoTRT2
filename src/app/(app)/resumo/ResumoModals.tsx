@@ -13,7 +13,7 @@ import {
 import type { OutraAprovacaoItem } from '@/src/components/resumo/ResumoHeroNew'
 import type { TdRequestTipo } from '@/features/tds/td-types'
 import { supabaseBrowser } from '@/lib/supabase-browser'
-import type { TdContentSettings } from '@/features/tds/td-content'
+import { DEFAULT_TD_CONTENT, type TdContentSettings } from '@/features/tds/td-content'
 import { useToast } from '@/components/ui/toast-provider'
 
 type BaseModalProps = {
@@ -556,10 +556,11 @@ export function EditarInfoModal(props: EditarInfoModalProps) {
 type EnviarTdModalProps = {
   trigger: React.ReactNode
   candidateId: string
-  tdContent: TdContentSettings
+  tdContent?: TdContentSettings
 }
 
 export function EnviarTdModal({ trigger, candidateId, tdContent }: EnviarTdModalProps) {
+  const effectiveContent = tdContent ?? DEFAULT_TD_CONTENT
   const [open, setOpen] = useState(false)
   const [tipoTd, setTipoTd] = useState<TdRequestTipo>('INTERESSE')
   const [observacao, setObservacao] = useState('')
@@ -569,18 +570,18 @@ export function EnviarTdModal({ trigger, candidateId, tdContent }: EnviarTdModal
   const { showToast } = useToast()
 
   const sanitizedGuidelines = useMemo(
-    () => sanitizeHtml(tdContent.guidelinesHtml ?? ''),
-    [tdContent.guidelinesHtml],
+    () => sanitizeHtml(effectiveContent.guidelinesHtml ?? ''),
+    [effectiveContent.guidelinesHtml],
   )
 
   const sanitizedModels = useMemo(
     () =>
-      (Array.isArray(tdContent.models) ? tdContent.models : []).map(model => ({
+      (Array.isArray(effectiveContent.models) ? effectiveContent.models : []).map(model => ({
         url: model.url,
         labelHtml: sanitizeModelLabel(model.label),
         buttonLabel: formatModelButtonLabel(model.label),
       })),
-    [tdContent.models],
+    [effectiveContent.models],
   )
 
   if (!candidateId) {
