@@ -1,9 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { useState, useTransition, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, useTransition, type CSSProperties, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, PencilLine } from 'lucide-react'
+import { ChevronLeft, ChevronRight, PencilLine, Search } from 'lucide-react'
 
 import type { ListasData, ListaCandidate, ListaKey, CandidateOutraAprovacao } from './loadListasData'
 import type { SistemaConcorrencia, SaveOutraAprovacaoInput, PretendeAssumirChoice, JaNomeadoChoice } from './listas-actions'
@@ -92,24 +92,26 @@ const sistemaLabel: Record<SistemaConcorrencia, string> = {
   IND: 'IND',
 }
 
+const LIST_PAGE_SIZE_OPTIONS = [25, 50, 75, 100, 200, 'ALL'] as const
+type ListPageSizeOption = typeof LIST_PAGE_SIZE_OPTIONS[number]
+
 export function ListasDashboard({ data, isComissao, selectedListKey, currentCandidate, outrasAprovacoes = [], onSaveOutraAprovacao }: ListasDashboardProps) {
   const router = useRouter()
   const [selectedCandidate, setSelectedCandidate] = useState<ListaCandidate | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
+  const [pageSize, setPageSize] = useState<ListPageSizeOption>(50)
+  const [currentPage, setCurrentPage] = useState(1)
   const isDetailPage = Boolean(selectedListKey)
   const candidateFromOrdem = currentCandidate ? data.ordem.find(candidate => candidate.id === currentCandidate.id) : null
   const candidateId = currentCandidate?.id
-  const handleBackClick = () => {
-    if (isDetailPage) {
-      router.push('/listas')
-      return
-    }
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value)
+    setCurrentPage(1)
+  }
 
-    if (typeof window !== 'undefined' && window.history.length > 1) {
-      router.back()
-    } else {
-      router.push('/resumo')
-    }
+  const handlePageSizeChange = (size: ListPageSizeOption) => {
+    setPageSize(size)
+    setCurrentPage(1)
   }
 
   const renderListaButtons = (activeKey?: ListaKey) => {
@@ -118,7 +120,7 @@ export function ListasDashboard({ data, isComissao, selectedListKey, currentCand
       <ListaButton
         key="ordem"
         title={ordemConfig.title}
-        href="/listas?lista=ordem"
+        href="/listas/ordem"
         variant="primary"
         active={activeKey === 'ordem'}
         colorClass={listaButtonColorClass.ordem}
@@ -138,7 +140,7 @@ export function ListasDashboard({ data, isComissao, selectedListKey, currentCand
               <ListaButton
                 key={key}
                 title={listaConfig[key].title}
-                href={`/listas?lista=${key}`}
+                href={`/listas/${key}`}
                 variant="secondary"
                 active={activeKey === key}
                 colorClass={listaButtonColorClass[key]}
@@ -175,49 +177,71 @@ export function ListasDashboard({ data, isComissao, selectedListKey, currentCand
   const activeItems = data[selectedListKey]
   const { title } = listaConfig[selectedListKey]
   const filteredItems = filterCandidates(activeItems, searchTerm)
+  const isAllPageSize = pageSize === 'ALL'
+  const totalItems = filteredItems.length
+  const totalPages = isAllPageSize ? 1 : Math.max(1, Math.ceil(totalItems / pageSize))
+  const safeCurrentPage = isAllPageSize ? 1 : Math.min(currentPage, totalPages)
 
+  useEffect(() => {
+    if (!isAllPageSize && currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [currentPage, isAllPageSize, totalPages])
+
+  const paginatedItems = useMemo(() => {
+    if (isAllPageSize) {
+      return filteredItems
+    }
+
+    const start = (safeCurrentPage - 1) * pageSize
+    return filteredItems.slice(start, start + pageSize)
+  }, [filteredItems, isAllPageSize, pageSize, safeCurrentPage])
+
+  const handleGoToPreviousPage = () => {
+    if (isAllPageSize) return
+    setCurrentPage(previous => Math.max(1, previous - 1))
+  }
+
+  const handleGoToNextPage = () => {
+    if (isAllPageSize) return
+    setCurrentPage(previous => Math.min(totalPages, previous + 1))
+  }
   return (
-    <section className="space-y-8 pb-12">
-      <button
-        type="button"
-        onClick={handleBackClick}
-        className="inline-flex w-fit items-center gap-2 rounded-full border border-slate-200/80 bg-white/80 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:-translate-x-0.5 hover:border-slate-300 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/70"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Voltar para listas
-      </button>
+    <section className="-mt-4 flex min-h-[calc(100vh-64px)] flex-1 flex-col pb-0">
+      <div className="-mx-3 flex min-h-0 flex-1 flex-col sm:-mx-4 lg:-mx-6 xl:-mx-8 md:-mt-16">
+        <div className="flex min-h-0 flex-1 flex-col border border-[#bdbbbb] bg-white shadow-xl shadow-zinc-200/60">
+          <div className="grid flex-1 min-h-[calc(100vh-64px)] grid-rows-[auto_1fr_auto]">
+            <ListHeaderCard
+              title={title}
+              searchTerm={searchTerm}
+              onSearchChange={handleSearchChange}
+            />
 
-      <Card className="border-none bg-white/90 shadow-xl shadow-zinc-200/60">
-        <CardContent className="p-0">
-          <div className="border-b border-zinc-100 px-6 py-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <p className="text-xs font-semibold tracking-[0.08em] text-zinc-400">Acompanhamento em tempo real</p>
-                <h2 className="text-2xl font-semibold text-zinc-900">{title}</h2>
-                <p className="text-sm text-zinc-500">Filtre por nome ou órgão para encontrar rapidamente um aprovado.</p>
-              </div>
-
-              <div className="w-full lg:max-w-md">
-                <Input
-                  type="search"
-                  value={searchTerm}
-                  onChange={event => setSearchTerm(event.target.value)}
-                  placeholder="Buscar por nome ou órgão"
-                  className="h-11 rounded-full border-zinc-200 bg-white/70 text-sm text-zinc-700 placeholder:text-zinc-400 focus-visible:ring-red-500/40"
-                />
+            <div className="min-h-0">
+              <div className="flex h-full flex-col border border-[#bdbbbb] border-t-0 bg-white shadow-sm">
+                <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto">
+                  <CandidateTable
+                    items={paginatedItems}
+                    showOrdem={selectedListKey === 'ordem'}
+                    onSelect={setSelectedCandidate}
+                  />
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="px-6 py-5">
-            <CandidateTable
-              items={filteredItems}
-              showOrdem={selectedListKey === 'ordem'}
-              onSelect={setSelectedCandidate}
+            <ListPaginationFooter
+              totalItems={totalItems}
+              pageSize={pageSize}
+              onPageSizeChange={handlePageSizeChange}
+              currentPage={safeCurrentPage}
+              totalPages={totalPages}
+              onPrevious={handleGoToPreviousPage}
+              onNext={handleGoToNextPage}
+              isAll={isAllPageSize}
             />
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       <CandidateDrawer
         candidate={selectedCandidate}
@@ -779,6 +803,12 @@ type TableProps = {
   onSelect: (c: ListaCandidate) => void
 }
 
+type ListHeaderCardProps = {
+  title: string
+  searchTerm: string
+  onSearchChange: (value: string) => void
+}
+
 function filterCandidates(items: ListaCandidate[], term: string) {
   const normalizedTerm = term.trim().toLowerCase()
 
@@ -795,34 +825,66 @@ function filterCandidates(items: ListaCandidate[], term: string) {
   })
 }
 
+function ListHeaderCard({ title, searchTerm, onSearchChange }: ListHeaderCardProps) {
+  return (
+    <div className="border border-[#bdbbbb] border-b-0 bg-[#bdbbbb] px-4 pt-3 pb-3 text-[#1f1f1f] shadow-sm">
+      <div className="grid items-start gap-y-3 font-['Aller'] md:grid-cols-[minmax(0,1fr)_minmax(220px,1fr)] md:grid-rows-[auto_auto]">
+        <h2 className="order-1 text-left text-3xl font-heading font-semibold tracking-[0.05em] text-[#004C3F] md:col-start-1">
+          {title}
+        </h2>
+        <div className="order-2 w-full md:col-start-2 md:ml-auto md:w-auto">
+          <label className="sr-only" htmlFor="listas-search">
+            Buscar por nome ou órgão
+          </label>
+          <div className="flex h-6 w-full items-center gap-1 rounded-full border border-[#004C3F] bg-white/80 px-2 shadow-sm transition focus-within:ring-2 focus-within:ring-[#004C3F]/25 md:w-[190px]">
+            <Search className="h-[11px] w-[11px] text-[#004C3F]" strokeWidth={1.25} aria-hidden="true" />
+            <input
+              id="listas-search"
+              type="search"
+              placeholder="Buscar por nome ou órgão"
+              value={searchTerm}
+              onChange={event => onSearchChange(event.target.value)}
+              className="w-full border-none bg-transparent text-[11px] font-['Aller'] font-medium tracking-tight text-[#1f1f1f] placeholder:text-[#7a7a7a] focus:outline-none"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function CandidateTable({ items, showOrdem, onSelect }: TableProps) {
-  if (!items.length) {
-    return <p className="rounded-2xl border border-dashed border-zinc-200 bg-white/70 px-4 py-6 text-center text-sm text-zinc-500">Nenhum candidato cadastrado ainda nesta lista.</p>
-  }
+  const totalColumns = showOrdem ? 8 : 6
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-zinc-100 bg-white">
-      <table className="min-w-full divide-y divide-zinc-100 text-sm">
-        <thead className="sticky top-0 z-10 bg-white/95 shadow-sm backdrop-blur supports-[backdrop-filter]:backdrop-blur-sm">
-          <tr className="text-[11px] uppercase tracking-[0.3em] text-zinc-500">
-            {showOrdem && (
-              <>
-                <th className="pl-2 pr-1 py-3 text-center">Ordem</th>
-                <th className="pl-1 pr-2 py-3 text-center">Lista</th>
-              </>
-            )}
-            <th className="px-3 py-3 text-center">Nome</th>
-            <th className="px-3 py-3 text-center">Pos. Lista</th>
-            <th className="px-3 py-3 text-center">Nomeado?</th>
-            <th className="px-3 py-3 text-center">TD?</th>
-            <th className="px-3 py-3 text-center">Outras aprovações</th>
-            <th className="w-0 px-3 py-3 text-center">
-              <span className="sr-only">Ações</span>
-            </th>
+    <table className="min-w-full table-fixed divide-y divide-zinc-100 text-sm">
+      <thead className="sticky top-0 z-10 bg-white shadow-sm">
+        <tr className="bg-white/95 text-[11px] uppercase tracking-[0.3em] text-zinc-500">
+          {showOrdem && (
+            <>
+              <th className="pl-1 pr-0.5 py-3 text-center">Ordem</th>
+              <th className="pl-0.5 pr-0.5 py-3 text-center">Lista</th>
+            </>
+          )}
+          <th className="px-0.5 py-3 text-center">Nome</th>
+          <th className="px-0.5 py-3 text-center">Pos. Lista</th>
+          <th className="px-0.5 py-3 text-center">Nomeado?</th>
+          <th className="px-0.5 py-3 text-center">TD?</th>
+          <th className="px-0.5 py-3 text-center">Outras aprovações</th>
+          <th className="w-0 px-0.5 py-3 text-center">
+            <span className="sr-only">Ações</span>
+          </th>
+        </tr>
+      </thead>
+      <tbody className="divide-y divide-zinc-100 text-zinc-600">
+        {items.length === 0 ? (
+          <tr>
+            <td colSpan={totalColumns} className="bg-white/70 px-4 py-6 text-center text-sm text-zinc-500">
+              Nenhum candidato cadastrado ainda nesta lista.
+            </td>
           </tr>
-        </thead>
-        <tbody className="divide-y divide-zinc-100 text-zinc-600">
-          {items.map(candidate => {
+        ) : (
+          items.map(candidate => {
             const nomeado = candidate.status_nomeacao === 'NOMEADO'
             const td = candidate.td_status
             const rowHighlightStyle = getRowHighlightStyle(nomeado, td)
@@ -830,9 +892,7 @@ function CandidateTable({ items, showOrdem, onSelect }: TableProps) {
             return (
               <tr
                 key={candidate.id}
-                className={cn(
-                  'transition',
-                )}
+                className={cn('transition')}
                 style={rowHighlightStyle}
               >
                 {showOrdem && (
@@ -845,14 +905,14 @@ function CandidateTable({ items, showOrdem, onSelect }: TableProps) {
                     </td>
                   </>
                 )}
-                <td className="px-3 py-3 text-left font-medium text-zinc-900">{candidate.nome}</td>
-                <td className="px-3 py-3 text-center text-zinc-700">{candidate.classificacao_lista ?? '—'}</td>
-                <td className="px-3 py-3 text-center text-zinc-700">{renderNomeadoChip(nomeado)}</td>
-                <td className="px-3 py-3 text-center text-zinc-700">{renderTdChip(candidate.td_status)}</td>
-                <td className="px-3 py-3 text-left text-zinc-700">
+                <td className="px-0.5 py-3 text-left font-medium text-zinc-900">{candidate.nome}</td>
+                <td className="px-0.5 py-3 text-center text-zinc-700">{candidate.classificacao_lista ?? '—'}</td>
+                <td className="px-0.5 py-3 text-center text-zinc-700">{renderNomeadoChip(nomeado)}</td>
+                <td className="px-0.5 py-3 text-center text-zinc-700">{renderTdChip(candidate.td_status)}</td>
+                <td className="px-0.5 py-3 text-left text-zinc-700">
                   <OutrasAprovacoesChips approvals={candidate.outras_aprovacoes} resumo={candidate.outras_aprovacoes_resumo} />
                 </td>
-                <td className="px-3 py-3 text-right">
+                <td className="px-0.5 py-3 text-right">
                   <button
                     type="button"
                     onClick={() => onSelect(candidate)}
@@ -864,9 +924,86 @@ function CandidateTable({ items, showOrdem, onSelect }: TableProps) {
                 </td>
               </tr>
             )
-          })}
-        </tbody>
-      </table>
+          })
+        )}
+      </tbody>
+    </table>
+  )
+}
+
+type ListPaginationFooterProps = {
+  totalItems: number
+  pageSize: ListPageSizeOption
+  onPageSizeChange: (size: ListPageSizeOption) => void
+  currentPage: number
+  totalPages: number
+  onPrevious: () => void
+  onNext: () => void
+  isAll: boolean
+}
+
+function ListPaginationFooter({
+  totalItems,
+  pageSize,
+  onPageSizeChange,
+  currentPage,
+  totalPages,
+  onPrevious,
+  onNext,
+  isAll,
+}: ListPaginationFooterProps) {
+  const selectValue = pageSize === 'ALL' ? 'ALL' : String(pageSize)
+  const canNavigate = !isAll && totalPages > 1 && totalItems > 0
+  const disablePrevious = !canNavigate || currentPage <= 1
+  const disableNext = !canNavigate || currentPage >= totalPages
+  const pageLabel = totalItems
+    ? (isAll ? `Todos os itens` : `Página ${currentPage} de ${totalPages}`)
+    : 'Nenhum item'
+
+  const handleValueChange = (value: string) => {
+    const parsed = value === 'ALL' ? 'ALL' : Number(value)
+    onPageSizeChange(parsed as ListPageSizeOption)
+  }
+
+  return (
+    <div className="flex w-full flex-shrink-0 flex-nowrap items-center justify-between gap-3 border-t border-zinc-100 bg-white px-3 py-2 text-[10px] font-['Aller'] font-medium uppercase tracking-[0.14em] text-[#1f1f1f] sm:px-4">
+      <div className="flex items-center gap-2">
+        <span className="whitespace-nowrap">Itens por página</span>
+        <Select value={selectValue} onValueChange={handleValueChange}>
+          <SelectTrigger className="h-[22px] min-w-[70px] rounded-full border border-[#004C3F] bg-white px-2 text-[10px] font-['Aller'] font-semibold uppercase tracking-[0.12em] text-[#004C3F] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#004C3F]/25">
+            <SelectValue placeholder="50" />
+          </SelectTrigger>
+          <SelectContent className="rounded-xl border border-zinc-200 bg-white text-[10px] font-['Aller'] uppercase tracking-[0.12em] text-[#004C3F] shadow-lg">
+            {LIST_PAGE_SIZE_OPTIONS.map(option => (
+              <SelectItem key={String(option)} value={option === 'ALL' ? 'ALL' : String(option)}>
+                {option === 'ALL' ? 'Todos' : option}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onPrevious}
+          disabled={disablePrevious}
+          className="inline-flex items-center gap-1 rounded-full border border-[#004C3F] bg-white px-2 py-0.5 text-[10px] font-['Aller'] font-semibold uppercase tracking-[0.12em] text-[#004C3F] transition hover:bg-[#004C3F]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#004C3F]/25 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <ChevronLeft className="h-2.5 w-2.5" aria-hidden="true" />
+          <span>Anterior</span>
+        </button>
+        <span className="text-[#5f5f5f]">{pageLabel}</span>
+        <button
+          type="button"
+          onClick={onNext}
+          disabled={disableNext}
+          className="inline-flex items-center gap-1 rounded-full border border-[#004C3F] bg-white px-2 py-0.5 text-[10px] font-['Aller'] font-semibold uppercase tracking-[0.12em] text-[#004C3F] transition hover:bg-[#004C3F]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#004C3F]/25 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <span>Próxima</span>
+          <ChevronRight className="h-2.5 w-2.5" aria-hidden="true" />
+        </button>
+      </div>
     </div>
   )
 }

@@ -347,13 +347,17 @@ function ResumoConcursoCard({
             {totalsCards.map(card => (
               <div
                 key={card.id}
-                className="rounded-2xl border border-[#0d2f50]/12 bg-white p-4 shadow-[0_16px_30px_rgba(12,46,82,0.08)]"
+                className="rounded-2xl border border-[#0d2f50]/12 bg-white p-4 text-center shadow-[0_16px_30px_rgba(12,46,82,0.08)]"
               >
-                <p className="text-[11px] uppercase tracking-[0.24em] text-[#3c5b84]">{card.label}</p>
+                <p className="text-[11px] uppercase tracking-[0.24em] text-[#3c5b84]">
+                  {card.label}
+                </p>
                 <p className="mt-3 font-display text-[1.9rem] leading-none text-[#0d2f50]">
                   {card.totals.total}
                 </p>
-                <p className="mt-1 text-xs text-[#466188]">{formatTotalsBreakdown(card.totals)}</p>
+                <p className="mt-2 text-xs text-[#466188]">
+                  {formatTotalsBreakdown(card.totals)}
+                </p>
               </div>
             ))}
           </div>
@@ -445,7 +449,7 @@ function buildContactItems({
 function ContactPill({ item }: { item: ContactItemDescriptor }) {
   const { icon: Icon } = item
   const baseClass =
-    'inline-flex items-center gap-2 rounded-full border border-[#0d2f50]/18 bg-white px-3 py-1.5 text-sm font-semibold text-[#0d2f50] shadow-[0_8px_18px_rgba(9,51,96,0.14)] transition'
+    'inline-flex items-center gap-1.5 rounded-full border border-[#0d2f50]/20 bg-[#0d2f50]/10 px-3 py-1 text-[12px] font-medium text-[#0d2f50] shadow-[0_12px_22px_rgba(13,47,80,0.14)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0d2f50]/30'
 
   if (item.href) {
     return (
@@ -453,11 +457,11 @@ function ContactPill({ item }: { item: ContactItemDescriptor }) {
         href={item.href}
         target={item.external ? '_blank' : '_self'}
         rel={item.external ? 'noreferrer' : undefined}
-        className={`${baseClass} hover:border-[#0d2f50]/35 hover:bg-[#dbe7f6]`}
+        className={`${baseClass} hover:border-[#0d2f50]/35 hover:bg-[#0d2f50]/16`}
         title={item.title}
       >
-        <Icon className="h-4 w-4" aria-hidden="true" />
-        <span>{item.label}</span>
+        <Icon className="h-3.5 w-3.5 text-current" aria-hidden="true" />
+        <span className="leading-none">{item.label}</span>
       </a>
     )
   }
@@ -468,8 +472,8 @@ function ContactPill({ item }: { item: ContactItemDescriptor }) {
       aria-disabled="true"
       title={item.title}
     >
-      <Icon className="h-4 w-4" aria-hidden="true" />
-      <span>{item.label}</span>
+      <Icon className="h-3.5 w-3.5 text-current" aria-hidden="true" />
+      <span className="leading-none">{item.label}</span>
     </span>
   )
 }
